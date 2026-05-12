@@ -1,0 +1,255 @@
+import initSqlJs from "sql.js";
+import { unzipSync, strFromU8 } from "fflate";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, resolve } from "node:path";
+
+const VERSION = "2026.02.25";
+const SOURCE_BASE = `https://sourceforge.net/projects/wordlist/files/speller/${VERSION}`;
+const RAW_DIR = resolve("data/raw/scowl");
+const OUT_DB = resolve("public/data/words.sqlite");
+const OUT_META = resolve("public/data/build-meta.json");
+
+const DIALECTS = [
+  { key: "us", label: "American English", code: "en_US" },
+  { key: "gb", label: "British English", code: "en_GB" },
+  { key: "ca", label: "Canadian English", code: "en_CA" },
+  { key: "au", label: "Australian English", code: "en_AU" },
+];
+
+const SOURCE_PACKAGES = DIALECTS.flatMap((dialect) => [
+  { ...dialect, tier: "common", fileStem: `wordlist-${dialect.code}-${VERSION}` },
+  { ...dialect, tier: "large", fileStem: `wordlist-${dialect.code}-large-${VERSION}` },
+]);
+
+SOURCE_PACKAGES.splice(
+  2,
+  2,
+  {
+    key: "gb",
+    label: "British English",
+    code: "en_GB-ise",
+    tier: "common",
+    fileStem: `wordlist-en_GB-ise-${VERSION}`,
+  },
+  {
+    key: "gb",
+    label: "British English",
+    code: "en_GB-ize",
+    tier: "common",
+    fileStem: `wordlist-en_GB-ize-${VERSION}`,
+  },
+  {
+    key: "gb",
+    label: "British English",
+    code: "en_GB-large",
+    tier: "large",
+    fileStem: `wordlist-en_GB-large-${VERSION}`,
+  },
+);
+
+const POS_PATTERNS = [
+  { pos: "adverb", re: /ly$/ },
+  { pos: "adjective", re: /(able|ible|al|ful|ic|ish|ive|less|ous|y)$/ },
+  { pos: "verb", re: /(ate|en|fy|ise|ize)$/ },
+  { pos: "noun", re: /(age|ance|ence|er|hood|ion|ism|ist|ity|ment|ness|or|ship)$/ },
+];
+
+const PROPER_NOUN_HINTS = new Set([
+  "america",
+  "american",
+  "britain",
+  "british",
+  "canada",
+  "canadian",
+  "australia",
+  "australian",
+  "english",
+]);
+
+function sourceUrl(pkg) {
+  const fileName = `${pkg.fileStem}.zip`;
+  return `${SOURCE_BASE}/${fileName}/download`;
+}
+
+async function download(url, target) {
+  if (existsSync(target)) return;
+  console.log(`Downloading ${url}`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  writeFileSync(target, bytes);
+}
+
+function normalizeWord(word) {
+  return word
+    .trim()
+    .replaceAll("’", "'")
+    .normalize("NFKC")
+    .toLowerCase();
+}
+
+function inferPos(word) {
+  for (const pattern of POS_PATTERNS) {
+    if (pattern.re.test(word)) return pattern.pos;
+  }
+  return "noun";
+}
+
+function readPackageWords(pkg) {
+  const fileName = `${pkg.fileStem}.zip`;
+  const zipPath = resolve(RAW_DIR, fileName);
+  const archive = unzipSync(readFileSync(zipPath));
+  const textFile = Object.keys(archive).find(
+    (name) => name.endsWith(".txt") && !basename(name).startsWith("README"),
+  );
+  if (!textFile) throw new Error(`No wordlist .txt found in ${zipPath}`);
+  return strFromU8(archive[textFile])
+    .split(/\r?\n/)
+    .map(normalizeWord)
+    .filter(Boolean);
+}
+
+function applyWord(recordMap, rawWord, pkg) {
+  const word = normalizeWord(rawWord);
+  if (!word) return;
+  const containsLetter = /[a-z]/.test(word);
+  if (!containsLetter) return;
+
+  const existing =
+    recordMap.get(word) ??
+    {
+      word,
+      length: word.replace(/[^a-z]/g, "").length,
+      hasApostrophe: word.includes("'"),
+      hasHyphen: word.includes("-"),
+      isPhrase: /\s/.test(word),
+      pos: inferPos(word),
+      common: false,
+      dialects: new Set(),
+    };
+
+  existing.dialects.add(pkg.key);
+  if (pkg.tier === "common") existing.common = true;
+  recordMap.set(word, existing);
+}
+
+function createDatabase(records, sourceCount) {
+  const SQL = initSqlJs();
+  return SQL.then((SQLModule) => {
+    const db = new SQLModule.Database();
+    db.run(`
+      PRAGMA user_version = 1;
+
+      CREATE TABLE metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE words (
+        id INTEGER PRIMARY KEY,
+        word TEXT NOT NULL UNIQUE,
+        normalized TEXT NOT NULL,
+        length INTEGER NOT NULL,
+        commonness TEXT NOT NULL CHECK (commonness IN ('common', 'rare')),
+        pos TEXT NOT NULL,
+        is_phrase INTEGER NOT NULL,
+        has_apostrophe INTEGER NOT NULL,
+        has_hyphen INTEGER NOT NULL,
+        proper_noun_hint INTEGER NOT NULL,
+        dialect_us INTEGER NOT NULL,
+        dialect_gb INTEGER NOT NULL,
+        dialect_ca INTEGER NOT NULL,
+        dialect_au INTEGER NOT NULL,
+        source TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_words_length ON words(length);
+      CREATE INDEX idx_words_commonness ON words(commonness);
+      CREATE INDEX idx_words_pos ON words(pos);
+      CREATE INDEX idx_words_shape ON words(is_phrase, has_apostrophe, has_hyphen);
+      CREATE INDEX idx_words_dialects ON words(dialect_us, dialect_gb, dialect_ca, dialect_au);
+    `);
+
+    const insert = db.prepare(`
+      INSERT INTO words (
+        word, normalized, length, commonness, pos, is_phrase, has_apostrophe,
+        has_hyphen, proper_noun_hint, dialect_us, dialect_gb, dialect_ca, dialect_au, source
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    db.run("BEGIN TRANSACTION");
+    for (const record of records) {
+      insert.run([
+        record.word,
+        record.word,
+        record.length,
+        record.common ? "common" : "rare",
+        record.pos,
+        record.isPhrase ? 1 : 0,
+        record.hasApostrophe ? 1 : 0,
+        record.hasHyphen ? 1 : 0,
+        PROPER_NOUN_HINTS.has(record.word) ? 1 : 0,
+        record.dialects.has("us") ? 1 : 0,
+        record.dialects.has("gb") ? 1 : 0,
+        record.dialects.has("ca") ? 1 : 0,
+        record.dialects.has("au") ? 1 : 0,
+        `SCOWL/ESDB ${VERSION}`,
+      ]);
+    }
+    db.run("COMMIT");
+    insert.free();
+
+    const metadata = db.prepare("INSERT INTO metadata (key, value) VALUES (?, ?)");
+    metadata.run(["source", `SCOWL/ESDB ${VERSION}`]);
+    metadata.run(["generated_at", new Date().toISOString()]);
+    metadata.run(["records", String(records.length)]);
+    metadata.run(["source_entries", String(sourceCount)]);
+    metadata.free();
+
+    return db.export();
+  });
+}
+
+async function main() {
+  mkdirSync(RAW_DIR, { recursive: true });
+  mkdirSync(dirname(OUT_DB), { recursive: true });
+
+  for (const pkg of SOURCE_PACKAGES) {
+    const fileName = `${pkg.fileStem}.zip`;
+    await download(sourceUrl(pkg), resolve(RAW_DIR, fileName));
+  }
+
+  const records = new Map();
+  let sourceCount = 0;
+  for (const pkg of SOURCE_PACKAGES) {
+    const words = readPackageWords(pkg);
+    sourceCount += words.length;
+    for (const word of words) applyWord(records, word, pkg);
+  }
+
+  const sortedRecords = [...records.values()].sort((a, b) => a.word.localeCompare(b.word));
+  const dbBytes = await createDatabase(sortedRecords, sourceCount);
+  writeFileSync(OUT_DB, Buffer.from(dbBytes));
+
+  const meta = {
+    source: `SCOWL/ESDB ${VERSION}`,
+    generatedAt: new Date().toISOString(),
+    records: sortedRecords.length,
+    sourceEntries: sourceCount,
+    dialects: DIALECTS.map(({ key, label }) => ({ key, label })),
+  };
+  writeFileSync(OUT_META, `${JSON.stringify(meta, null, 2)}\n`);
+  console.log(`Wrote ${OUT_DB} with ${sortedRecords.length.toLocaleString()} words.`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

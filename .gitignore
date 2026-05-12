@@ -1,0 +1,13 @@
+node_modules/
+dist/
+output/
+.DS_Store
+data/raw/
+public/data/*.sqlite
+public/data/build-meta.json
+public/sql-wasm.wasm
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+test-results/
+*.log

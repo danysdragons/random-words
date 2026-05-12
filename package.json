@@ -1,0 +1,37 @@
+{
+  "name": "random-words",
+  "version": "1.0.0",
+  "description": "A static random word and phrase set generator backed by a generated SQLite word database.",
+  "type": "module",
+  "scripts": {
+    "preprocess": "node scripts/build-db.mjs",
+    "copy:wasm": "node scripts/copy-sql-wasm.mjs",
+    "dev": "npm run preprocess && npm run copy:wasm && vite",
+    "build": "npm run preprocess && npm run copy:wasm && tsc -b && vite build",
+    "preview": "vite preview",
+    "check": "tsc -b",
+    "test:smoke": "playwright test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "fflate": "^0.8.2",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "sql.js": "^1.14.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/sql.js": "^1.4.11"
+  }
+}
