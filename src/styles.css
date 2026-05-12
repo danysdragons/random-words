@@ -525,7 +525,7 @@ input[type="range"] {
 
 .word-tile {
   position: relative;
-  min-height: 70px;
+  min-height: 76px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -579,6 +579,16 @@ input[type="range"] {
   color: #916224;
 }
 
+.word-details {
+  max-width: 100%;
+  color: #77736b;
+  font-size: 11px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .definition-tooltip {
   position: absolute;
   z-index: 5;
@@ -608,6 +618,15 @@ input[type="range"] {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0;
+}
+
+.tooltip-meta {
+  display: block;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(248, 247, 242, 0.18);
+  color: #d8d2c7;
+  font-size: 11px;
 }
 
 .definition-tooltip::after {

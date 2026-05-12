@@ -67,6 +67,20 @@ test("applies POS filters and exposes acronym filtering", async ({ page }) => {
   await expect(page.locator(".word-tile .pos")).toHaveText(Array(36).fill("V"));
 });
 
+test("can show word metadata details on generated tiles", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.locator(".toggle-row").filter({ hasText: "Show word details" }).getByRole("button").click();
+  await page.getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  await expect(page.locator(".word-tile")).toHaveCount(36);
+  await expect(page.locator(".word-details").first()).toBeVisible();
+  await expect(page.locator(".word-details").first()).toContainText(/Curated|Morphology|Suffix|Default|Datamuse/);
+});
+
 test("classifies common inflected verb forms as verbs", async () => {
   const SQL = await initSqlJs();
   const db = new SQL.Database(readFileSync("public/data/words.sqlite"));

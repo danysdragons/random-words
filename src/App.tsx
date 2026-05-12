@@ -95,6 +95,14 @@ const DEFAULT_FILTERS: Filters = {
   seed: "728391",
 };
 
+interface DisplaySettings {
+  showWordDetails: boolean;
+}
+
+const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  showWordDetails: false,
+};
+
 const DIALECT_LABELS: Record<Dialect, string> = {
   us: "American English",
   gb: "British English",
@@ -130,6 +138,10 @@ function App() {
   const [view, setView] = usePersistentState<AppView>("random-words:view:v1", "generator");
   const [wordDb, setWordDb] = useState<WordDatabase | null>(null);
   const [filters, setFilters] = usePersistentState<Filters>("random-words:filters:v1", DEFAULT_FILTERS);
+  const [displaySettings, setDisplaySettings] = usePersistentState<DisplaySettings>(
+    "random-words:display:v1",
+    DEFAULT_DISPLAY_SETTINGS,
+  );
   const [basePool, setBasePool] = useState<WordEntry[]>([]);
   const [semanticPool, setSemanticPool] = useState<WordEntry[]>([]);
   const [sets, setSets] = usePersistentState<GeneratedSet[]>("random-words:current-sets:v1", []);
@@ -516,6 +528,7 @@ function App() {
                     set={set}
                     index={index}
                     definitions={definitions}
+                    showDetails={displaySettings.showWordDetails}
                     onCopy={(words) => void copyWords(words, setToast)}
                     onSave={() => saveSet(set, index)}
                     onRegenerate={() => void handleRegenerateSet(index)}
@@ -588,6 +601,8 @@ function App() {
           }}
           clearDatamuseCache={clearDatamuseCache}
           clearWorkspaceData={clearWorkspaceData}
+          displaySettings={displaySettings}
+          updateDisplaySettings={setDisplaySettings}
         />
       )}
     </div>
@@ -841,6 +856,7 @@ function WordSetCard({
   set,
   index,
   definitions,
+  showDetails,
   onCopy,
   onSave,
   onRegenerate,
@@ -848,6 +864,7 @@ function WordSetCard({
   set: GeneratedSet;
   index: number;
   definitions: Record<string, string>;
+  showDetails: boolean;
   onCopy: (words: WordEntry[]) => void;
   onSave: () => void;
   onRegenerate: () => void;
@@ -885,10 +902,22 @@ function WordSetCard({
             <span className="word-number">{wordIndex + 1}</span>
             <strong>{entry.word}</strong>
             <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
+            {showDetails && (
+              <span className="word-details">
+                {entry.baseForm !== entry.word && `base ${entry.baseForm} · `}
+                {posSourceLabel(entry.posSource)} · {entry.posConfidence}%
+              </span>
+            )}
             {definitions[entry.word] && (
               <span className="definition-tooltip" role="tooltip">
                 <strong>{entry.frequencyBand}</strong>
                 {definitions[entry.word]}
+                {showDetails && (
+                  <span className="tooltip-meta">
+                    {entry.baseForm !== entry.word ? `Base ${entry.baseForm} · ` : ""}
+                    POS {posSourceLabel(entry.posSource).toLowerCase()} · {entry.posConfidence}% confidence
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -1243,14 +1272,27 @@ function SettingsDialog({
   resetFilters,
   clearDatamuseCache,
   clearWorkspaceData,
+  displaySettings,
+  updateDisplaySettings,
 }: {
   close: () => void;
   resetFilters: () => void;
   clearDatamuseCache: () => void;
   clearWorkspaceData: () => void;
+  displaySettings: DisplaySettings;
+  updateDisplaySettings: (settings: DisplaySettings) => void;
 }) {
   return (
     <Modal title="Settings" close={close}>
+      <div className="dialog-section">
+        <h3>Display</h3>
+        <Toggle
+          label="Show word details"
+          checked={displaySettings.showWordDetails}
+          onChange={(checked) => updateDisplaySettings({ ...displaySettings, showWordDetails: checked })}
+        />
+        <p className="muted">Adds base form, POS source, and confidence to generated word tiles.</p>
+      </div>
       <div className="settings-actions">
         <button onClick={resetFilters}>Reset generator defaults</button>
         <button onClick={clearDatamuseCache}>Clear semantic cache</button>
@@ -1368,6 +1410,16 @@ function posShort(pos: PartOfSpeech) {
     interjection: "Int",
     other: "Other",
   }[pos];
+}
+
+function posSourceLabel(source: WordEntry["posSource"]) {
+  return {
+    override: "Curated",
+    morphology: "Morphology",
+    suffix: "Suffix",
+    default: "Default",
+    datamuse: "Datamuse",
+  }[source];
 }
 
 function normalizeTheme(value: string) {
