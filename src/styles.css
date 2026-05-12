@@ -949,6 +949,62 @@ input[type="range"] {
   font-size: 14px;
 }
 
+.manual-panel {
+  max-width: 980px;
+}
+
+.manual-content {
+  display: grid;
+  gap: 12px;
+  max-width: 840px;
+  color: #34312c;
+}
+
+.manual-content h1,
+.manual-content h2,
+.manual-content h3,
+.manual-content p,
+.manual-content ul,
+.manual-content ol {
+  margin: 0;
+}
+
+.manual-content h1 {
+  margin-top: 4px;
+  font-size: 28px;
+}
+
+.manual-content h2 {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #ece6dc;
+  font-size: 21px;
+}
+
+.manual-content h3 {
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+.manual-content p,
+.manual-content li {
+  color: #5b574f;
+  line-height: 1.65;
+}
+
+.manual-content ul,
+.manual-content ol {
+  padding-left: 22px;
+}
+
+.manual-content code {
+  padding: 2px 5px;
+  color: #164744;
+  background: #eef8f6;
+  border: 1px solid #d3ebe7;
+  border-radius: 5px;
+}
+
 .settings-actions {
   display: grid;
   gap: 10px;
