@@ -66,6 +66,12 @@ Run the full data audit:
 npm run audit:data
 ```
 
+Generate the committed Markdown review report:
+
+```bash
+npm run report:data
+```
+
 Inspect selected POS metadata directly:
 
 ```bash
@@ -75,6 +81,5 @@ node --input-type=module -e "import initSqlJs from 'sql.js'; import { readFileSy
 ## Next Steps
 
 1. Add an `alternate_pos` field or normalized POS table for genuinely ambiguous words.
-2. Add a small review script that writes the weak POS buckets to JSON or Markdown.
-3. Continue conservative overrides for high-frequency words seen in normal generation.
-4. Use POS metadata in optional tile details so power users can inspect base form, source, and confidence.
+2. Continue conservative overrides for high-frequency words seen in normal generation.
+3. Use POS metadata in optional tile details so power users can inspect base form, source, and confidence.

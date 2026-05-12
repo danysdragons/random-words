@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "check": "tsc -b",
     "audit:data": "node scripts/audit-db.mjs",
+    "report:data": "node scripts/write-data-quality-report.mjs",
     "test:smoke": "playwright test"
   },
   "keywords": [],
