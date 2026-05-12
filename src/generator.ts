@@ -42,10 +42,13 @@ export function generateSets(
 
 function selectPool(basePool: WordEntry[], semanticPool: WordEntry[], filters: Filters) {
   if (!filters.theme.trim()) return basePool;
-  if (filters.semanticMode === "strict") return semanticPool.length ? semanticPool : basePool;
-  if (filters.semanticMode === "related") return [...semanticPool, ...semanticPool, ...basePool];
-  if (filters.semanticMode === "mood") return [...semanticPool, ...basePool];
-  return [...semanticPool, ...semanticPool, ...basePool, ...basePool];
+  const semanticCopies = Math.max(1, filters.semanticWeight);
+  const weightedSemantic = Array.from({ length: semanticCopies }, () => semanticPool).flat();
+  const fallback = filters.fallbackToGeneral ? basePool : [];
+  if (filters.semanticMode === "strict") return semanticPool.length ? semanticPool : fallback;
+  if (filters.semanticMode === "related") return [...weightedSemantic, ...weightedSemantic, ...fallback];
+  if (filters.semanticMode === "mood") return [...weightedSemantic, ...fallback];
+  return [...weightedSemantic, ...fallback, ...fallback];
 }
 
 function mergeSemantic(basePool: WordEntry[], semanticPool: WordEntry[]) {

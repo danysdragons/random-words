@@ -33,6 +33,9 @@ export interface Filters {
   theme: string;
   semanticMode: SemanticMode;
   includePhrases: boolean;
+  semanticLimit: number;
+  semanticWeight: number;
+  fallbackToGeneral: boolean;
   seed: string;
 }
 
@@ -53,6 +56,24 @@ export interface GeneratedSet {
   theme: string;
   createdAt: string;
 }
+
+export interface SavedSet {
+  id: string;
+  name: string;
+  set: GeneratedSet;
+  savedAt: string;
+  collectionId: string | null;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export type ExportFormat = "json" | "csv" | "txt";
+
+export type AppView = "generator" | "saved" | "collections" | "about";
 
 export interface BuildMeta {
   source: string;

@@ -25,11 +25,12 @@ export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]>
     theme.toLowerCase(),
     filters.semanticMode,
     filters.includePhrases ? "phrases" : "words",
+    filters.semanticLimit,
   ].join("|");
   if (cache[key]) return cache[key];
 
   const params = new URLSearchParams();
-  params.set("max", filters.semanticMode === "strict" ? "300" : "600");
+  params.set("max", String(filters.semanticLimit));
   params.set("md", "p");
 
   if (filters.semanticMode === "mood") {

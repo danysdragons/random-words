@@ -3,16 +3,20 @@ import {
   Copy,
   Database,
   Download,
+  FileText,
+  Folder,
   HelpCircle,
   History,
   Info,
   Loader2,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
   Settings,
   Shuffle,
   Sparkles,
+  Star,
   Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -20,10 +24,14 @@ import { loadWordDatabase, queryWords, type WordDatabase } from "./data";
 import { fetchSemanticWords } from "./datamuse";
 import { generateSets } from "./generator";
 import type {
+  AppView,
+  Collection,
   Dialect,
+  ExportFormat,
   Filters,
   GeneratedSet,
   PartOfSpeech,
+  SavedSet,
   SemanticMode,
   WordEntry,
 } from "./types";
@@ -73,6 +81,9 @@ const DEFAULT_FILTERS: Filters = {
   theme: "",
   semanticMode: "broad",
   includePhrases: false,
+  semanticLimit: 600,
+  semanticWeight: 2,
+  fallbackToGeneral: true,
   seed: "728391",
 };
 
@@ -90,14 +101,27 @@ const MODE_LABELS: Record<SemanticMode, string> = {
   mood: "Mood / tone",
 };
 
+interface HistoryEntry {
+  id: string;
+  sets: GeneratedSet[];
+  filters: Filters;
+  createdAt: string;
+}
+
 function App() {
+  const [view, setView] = usePersistentState<AppView>("random-words:view:v1", "generator");
   const [wordDb, setWordDb] = useState<WordDatabase | null>(null);
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = usePersistentState<Filters>("random-words:filters:v1", DEFAULT_FILTERS);
   const [basePool, setBasePool] = useState<WordEntry[]>([]);
   const [semanticPool, setSemanticPool] = useState<WordEntry[]>([]);
-  const [sets, setSets] = useState<GeneratedSet[]>([]);
-  const [history, setHistory] = useState<GeneratedSet[][]>([]);
+  const [sets, setSets] = usePersistentState<GeneratedSet[]>("random-words:current-sets:v1", []);
+  const [history, setHistory] = usePersistentState<HistoryEntry[]>("random-words:history:v1", []);
+  const [savedSets, setSavedSets] = usePersistentState<SavedSet[]>("random-words:saved:v1", []);
+  const [collections, setCollections] = usePersistentState<Collection[]>("random-words:collections:v1", []);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("json");
+  const [collectionName, setCollectionName] = useState("");
   const [status, setStatus] = useState("Loading word database...");
+  const [toast, setToast] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
@@ -116,6 +140,12 @@ function App() {
     setBasePool(queryWords(wordDb.db, filters));
   }, [wordDb, filters]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(""), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
   async function handleGenerate(nextFilters = filters) {
     if (!wordDb) return;
     setIsGenerating(true);
@@ -125,9 +155,45 @@ function App() {
       const generated = generateSets(queryWords(wordDb.db, nextFilters), semanticWords, nextFilters);
       setSemanticPool(semanticWords);
       setSets(generated);
-      setHistory((current) => [generated, ...current].slice(0, 8));
+      setHistory((current) =>
+        [
+          {
+            id: createId("history"),
+            sets: generated,
+            filters: nextFilters,
+            createdAt: new Date().toISOString(),
+          },
+          ...current,
+        ].slice(0, 20),
+      );
+      setView("generator");
+      if (generated.some((set) => set.words.length < nextFilters.wordsPerSet)) {
+        setStatus("Some sets were smaller than requested because the active filters narrowed the pool.");
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Generation failed.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function handleRegenerateSet(targetIndex: number) {
+    if (!wordDb) return;
+    const nextFilters = {
+      ...filters,
+      setCount: 1,
+      seed: `${filters.seed}-${targetIndex + 1}-${Date.now()}`,
+    };
+    setIsGenerating(true);
+    try {
+      const semanticWords = await fetchSemanticWords(nextFilters);
+      const [replacement] = generateSets(queryWords(wordDb.db, nextFilters), semanticWords, nextFilters);
+      if (!replacement) return;
+      setSemanticPool(semanticWords);
+      setSets((current) => current.map((set, index) => (index === targetIndex ? replacement : set)));
+      setToast(`Regenerated Set ${targetIndex + 1}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Regeneration failed.");
     } finally {
       setIsGenerating(false);
     }
@@ -150,17 +216,80 @@ function App() {
     void handleGenerate(nextFilters);
   }
 
-  function exportJson() {
-    const blob = new Blob([JSON.stringify({ filters, sets }, null, 2)], {
-      type: "application/json",
+  function exportCurrentSets(format = exportFormat) {
+    const blob = new Blob([serializeSets(sets, format)], {
+      type: exportMime(format),
     });
-    downloadBlob(blob, "random-word-sets.json");
+    downloadBlob(blob, `random-word-sets.${format}`);
+  }
+
+  function saveSet(set: GeneratedSet, index: number) {
+    const saved: SavedSet = {
+      id: createId("saved"),
+      name: `${set.theme || "Random"} Set ${index + 1}`,
+      set,
+      savedAt: new Date().toISOString(),
+      collectionId: collections[0]?.id ?? null,
+    };
+    setSavedSets((current) => [saved, ...current]);
+    setToast(`Saved ${saved.name}`);
+  }
+
+  function saveAllSets() {
+    sets.forEach((set, index) => saveSet(set, index));
+  }
+
+  function removeSavedSet(id: string) {
+    setSavedSets((current) => current.filter((set) => set.id !== id));
+  }
+
+  function updateSavedCollection(savedId: string, collectionId: string) {
+    setSavedSets((current) =>
+      current.map((saved) =>
+        saved.id === savedId ? { ...saved, collectionId: collectionId || null } : saved,
+      ),
+    );
+  }
+
+  function createCollection() {
+    const name = collectionName.trim();
+    if (!name) return;
+    setCollections((current) => [
+      {
+        id: createId("collection"),
+        name,
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ]);
+    setCollectionName("");
+  }
+
+  function removeCollection(id: string) {
+    setCollections((current) => current.filter((collection) => collection.id !== id));
+    setSavedSets((current) =>
+      current.map((saved) => (saved.collectionId === id ? { ...saved, collectionId: null } : saved)),
+    );
+  }
+
+  function restoreHistory(entry: HistoryEntry) {
+    setFilters(entry.filters);
+    setSets(entry.sets);
+    setView("generator");
   }
 
   const generatedWordCount = useMemo(
     () => sets.reduce((total, set) => total + set.words.length, 0),
     [sets],
   );
+
+  const collectionCounts = useMemo(() => {
+    const counts = new Map<string | null, number>();
+    for (const saved of savedSets) {
+      counts.set(saved.collectionId, (counts.get(saved.collectionId) ?? 0) + 1);
+    }
+    return counts;
+  }, [savedSets]);
 
   return (
     <div className="app-shell">
@@ -173,10 +302,18 @@ function App() {
           </div>
         </div>
         <nav>
-          <a className="active">Generator</a>
-          <a>Saved Sets</a>
-          <a>Collections</a>
-          <a href="#about-data">About Data</a>
+          <button className={view === "generator" ? "active" : ""} onClick={() => setView("generator")}>
+            Generator
+          </button>
+          <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}>
+            Saved Sets
+          </button>
+          <button className={view === "collections" ? "active" : ""} onClick={() => setView("collections")}>
+            Collections
+          </button>
+          <button className={view === "about" ? "active" : ""} onClick={() => setView("about")}>
+            About Data
+          </button>
         </nav>
         <div className="top-actions">
           <HelpCircle size={18} />
@@ -184,87 +321,141 @@ function App() {
         </div>
       </header>
 
-      <main className="workspace">
-        <CriteriaPanel filters={filters} updateFilter={updateFilter} reset={() => setFilters(DEFAULT_FILTERS)} />
+      {view === "generator" ? (
+        <main className="workspace">
+          <CriteriaPanel filters={filters} updateFilter={updateFilter} reset={() => setFilters(DEFAULT_FILTERS)} />
 
-        <section className="main-panel">
-          <div className="section-head">
-            <div>
-              <h1>Generated word sets</h1>
-              <p>
-                {filters.setCount} sets · {filters.wordsPerSet} words each
-              </p>
-            </div>
-          </div>
-
-          <div className="toolbar">
-            <button className="primary" onClick={() => void handleGenerate()} disabled={isGenerating || !wordDb}>
-              {isGenerating ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
-              Generate
-            </button>
-            <button onClick={handleShuffle}>
-              <Shuffle size={18} />
-              Shuffle
-            </button>
-            <button onClick={() => setSets([])}>
-              <Trash2 size={18} />
-              Clear
-            </button>
-            <button onClick={exportJson}>
-              <Download size={18} />
-              Export
-            </button>
-          </div>
-
-          <div className="status-row">
-            <label>
-              <span>Seed</span>
-              <input value={filters.seed} onChange={(event) => updateFilter("seed", event.target.value)} />
-              <button className="icon" onClick={randomizeSeed} aria-label="Randomize seed">
-                <RotateCcw size={15} />
+          <section className="main-panel">
+            <div className="section-head">
+              <div>
+                <h1>Generated word sets</h1>
+                <p>
+                  {filters.setCount} sets · {filters.wordsPerSet} words each
+                </p>
+              </div>
+              <button className="save-all" onClick={saveAllSets} disabled={sets.length === 0}>
+                <Bookmark size={16} />
+                Save all
               </button>
-            </label>
-            <div className="metric">
-              Filtered pool size <strong>{basePool.length.toLocaleString()}</strong>
             </div>
-            <div className="metric">
-              Commonness <strong>{filters.includeRare ? "Expanded" : "Balanced"}</strong>
+
+            <div className="toolbar">
+              <button className="primary" onClick={() => void handleGenerate()} disabled={isGenerating || !wordDb}>
+                {isGenerating ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+                Generate
+              </button>
+              <button onClick={handleShuffle} disabled={isGenerating || !wordDb}>
+                <Shuffle size={18} />
+                Shuffle
+              </button>
+              <button onClick={() => setSets([])}>
+                <Trash2 size={18} />
+                Clear
+              </button>
+              <label className="export-control">
+                <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as ExportFormat)}>
+                  <option value="json">JSON</option>
+                  <option value="csv">CSV</option>
+                  <option value="txt">Text</option>
+                </select>
+                <button onClick={() => exportCurrentSets()}>
+                  <Download size={18} />
+                  Export
+                </button>
+              </label>
             </div>
-            {semanticPool.length > 0 && (
+
+            <div className="status-row">
+              <label>
+                <span>Seed</span>
+                <input value={filters.seed} onChange={(event) => updateFilter("seed", event.target.value)} />
+                <button className="icon" onClick={randomizeSeed} aria-label="Randomize seed">
+                  <RotateCcw size={15} />
+                </button>
+              </label>
               <div className="metric">
-                Semantic matches <strong>{semanticPool.length.toLocaleString()}</strong>
+                Filtered pool size <strong>{basePool.length.toLocaleString()}</strong>
               </div>
-            )}
-          </div>
-
-          {status && <div className="notice">{status}</div>}
-
-          <div className="sets">
-            {sets.length === 0 ? (
-              <div className="empty-state">
-                <Sparkles size={24} />
-                <h2>Ready to generate</h2>
-                <p>Choose criteria, add an optional theme, and generate reproducible sets.</p>
+              <div className="metric">
+                Commonness <strong>{filters.includeRare ? "Expanded" : "Balanced"}</strong>
               </div>
-            ) : (
-              sets.map((set, index) => <WordSetCard key={set.id} set={set} index={index} />)
-            )}
-          </div>
+              {semanticPool.length > 0 && (
+                <div className="metric">
+                  Semantic matches <strong>{semanticPool.length.toLocaleString()}</strong>
+                </div>
+              )}
+            </div>
 
-          <footer id="about-data" className="data-footnote">
-            <Database size={16} />
-            <span>
-              Source: {wordDb?.meta?.source ?? "SCOWL/ESDB"} ·{" "}
-              {wordDb?.meta?.records.toLocaleString() ?? "0"} normalized entries · Datamuse themes cached locally
-            </span>
-          </footer>
-        </section>
+            {(status || toast) && <div className="notice">{toast || status}</div>}
 
-        <aside className="right-panel">
-          <ThemePanel filters={filters} updateFilter={updateFilter} />
-          <HistoryPanel history={history} restore={(restored) => setSets(restored)} />
-        </aside>
-      </main>
+            <div className="sets">
+              {sets.length === 0 ? (
+                <div className="empty-state">
+                  <Sparkles size={24} />
+                  <h2>Ready to generate</h2>
+                  <p>Choose criteria, add an optional theme, and generate reproducible sets.</p>
+                </div>
+              ) : (
+                sets.map((set, index) => (
+                  <WordSetCard
+                    key={set.id}
+                    set={set}
+                    index={index}
+                    onCopy={(words) => void copyWords(words, setToast)}
+                    onSave={() => saveSet(set, index)}
+                    onRegenerate={() => void handleRegenerateSet(index)}
+                  />
+                ))
+              )}
+            </div>
+
+            <footer id="about-data" className="data-footnote">
+              <Database size={16} />
+              <span>
+                Source: {wordDb?.meta?.source ?? "SCOWL/ESDB"} ·{" "}
+                {wordDb?.meta?.records.toLocaleString() ?? "0"} normalized entries · Datamuse themes cached locally
+              </span>
+            </footer>
+          </section>
+
+          <aside className="right-panel">
+            <ThemePanel filters={filters} updateFilter={updateFilter} />
+            <HistoryPanel
+              history={history}
+              restore={restoreHistory}
+              clear={() => setHistory([])}
+            />
+          </aside>
+        </main>
+      ) : (
+        <main className="library-workspace">
+          {view === "saved" && (
+            <SavedSetsView
+              savedSets={savedSets}
+              collections={collections}
+              updateSavedCollection={updateSavedCollection}
+              removeSavedSet={removeSavedSet}
+              restore={(set) => {
+                setSets([set]);
+                setView("generator");
+              }}
+              copy={(words) => void copyWords(words, setToast)}
+            />
+          )}
+          {view === "collections" && (
+            <CollectionsView
+              collections={collections}
+              collectionCounts={collectionCounts}
+              collectionName={collectionName}
+              setCollectionName={setCollectionName}
+              createCollection={createCollection}
+              removeCollection={removeCollection}
+              savedSets={savedSets}
+            />
+          )}
+          {view === "about" && <AboutDataView wordDb={wordDb} />}
+        </main>
+      )}
 
       <div className="bottom-line">
         <span>All DB words are lowercase. Filters apply to normalized forms.</span>
@@ -298,6 +489,14 @@ function CriteriaPanel({
         min={1}
         max={40}
         onChange={(value) => updateFilter("wordsPerSet", value)}
+      />
+
+      <NumberControl
+        label="Number of sets"
+        value={filters.setCount}
+        min={1}
+        max={8}
+        onChange={(value) => updateFilter("setCount", value)}
       />
 
       <div className="field">
@@ -398,6 +597,8 @@ function ThemePanel({
   filters: Filters;
   updateFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
 }) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   return (
     <section className="panel theme-panel">
       <h2>Theme & Semantics</h2>
@@ -443,12 +644,58 @@ function ThemePanel({
           ))}
         </div>
       </div>
-      <button className="advanced">Advanced semantic options</button>
+      <button className="advanced" onClick={() => setAdvancedOpen((current) => !current)}>
+        Advanced semantic options
+      </button>
+      {advancedOpen && (
+        <div className="advanced-panel">
+          <div className="field compact">
+            <label>Theme expansion size</label>
+            <input
+              type="range"
+              min={100}
+              max={1000}
+              step={100}
+              value={filters.semanticLimit}
+              onChange={(event) => updateFilter("semanticLimit", Number(event.target.value))}
+            />
+            <small>{filters.semanticLimit} Datamuse candidates</small>
+          </div>
+          <div className="field compact">
+            <label>Theme strength</label>
+            <input
+              type="range"
+              min={1}
+              max={5}
+              value={filters.semanticWeight}
+              onChange={(event) => updateFilter("semanticWeight", Number(event.target.value))}
+            />
+            <small>{filters.semanticWeight}x semantic weighting</small>
+          </div>
+          <Toggle
+            label="Fallback to general pool"
+            checked={filters.fallbackToGeneral}
+            onChange={(checked) => updateFilter("fallbackToGeneral", checked)}
+          />
+        </div>
+      )}
     </section>
   );
 }
 
-function WordSetCard({ set, index }: { set: GeneratedSet; index: number }) {
+function WordSetCard({
+  set,
+  index,
+  onCopy,
+  onSave,
+  onRegenerate,
+}: {
+  set: GeneratedSet;
+  index: number;
+  onCopy: (words: WordEntry[]) => void;
+  onSave: () => void;
+  onRegenerate: () => void;
+}) {
   return (
     <article className="set-card">
       <header>
@@ -457,15 +704,15 @@ function WordSetCard({ set, index }: { set: GeneratedSet; index: number }) {
           <h2>Set {index + 1}</h2>
         </div>
         <div className="set-actions">
-          <button onClick={() => void copyWords(set.words)}>
+          <button onClick={() => onCopy(set.words)}>
             <Copy size={16} />
             Copy
           </button>
-          <button>
+          <button onClick={onSave}>
             <Bookmark size={16} />
             Save
           </button>
-          <button>
+          <button onClick={onRegenerate}>
             <RefreshCw size={16} />
             Regenerate
           </button>
@@ -487,28 +734,206 @@ function WordSetCard({ set, index }: { set: GeneratedSet; index: number }) {
 function HistoryPanel({
   history,
   restore,
+  clear,
 }: {
-  history: GeneratedSet[][];
-  restore: (sets: GeneratedSet[]) => void;
+  history: HistoryEntry[];
+  restore: (entry: HistoryEntry) => void;
+  clear: () => void;
 }) {
   return (
     <section className="panel history-panel">
       <div className="panel-title">
         <h2>Generation history</h2>
-        <History size={17} />
+        <button className="link" onClick={clear} disabled={history.length === 0}>
+          Clear
+        </button>
       </div>
       {history.length === 0 ? (
         <p className="muted">Generated sets will appear here.</p>
       ) : (
-        history.map((group, index) => (
-          <button key={group[0]?.id ?? index} className="history-item" onClick={() => restore(group)}>
-            <strong>{group[0]?.theme || "random"}</strong>
+        history.map((entry) => (
+          <button key={entry.id} className="history-item" onClick={() => restore(entry)}>
+            <strong>{entry.filters.theme || "random"}</strong>
             <span>
-              {group.length} sets · {group.reduce((total, set) => total + set.words.length, 0)} words
+              {entry.sets.length} sets · {entry.sets.reduce((total, set) => total + set.words.length, 0)} words
             </span>
           </button>
         ))
       )}
+    </section>
+  );
+}
+
+function SavedSetsView({
+  savedSets,
+  collections,
+  updateSavedCollection,
+  removeSavedSet,
+  restore,
+  copy,
+}: {
+  savedSets: SavedSet[];
+  collections: Collection[];
+  updateSavedCollection: (savedId: string, collectionId: string) => void;
+  removeSavedSet: (id: string) => void;
+  restore: (set: GeneratedSet) => void;
+  copy: (words: WordEntry[]) => void;
+}) {
+  return (
+    <section className="main-panel library-panel">
+      <div className="section-head">
+        <div>
+          <h1>Saved sets</h1>
+          <p>{savedSets.length} saved word sets</p>
+        </div>
+      </div>
+      {savedSets.length === 0 ? (
+        <div className="empty-state">
+          <Bookmark size={24} />
+          <h2>No saved sets yet</h2>
+          <p>Save a generated set to keep it available here.</p>
+        </div>
+      ) : (
+        <div className="saved-list">
+          {savedSets.map((saved) => (
+            <article className="saved-item" key={saved.id}>
+              <header>
+                <div>
+                  <h2>{saved.name}</h2>
+                  <p>{saved.set.words.length} words · {formatDate(saved.savedAt)}</p>
+                </div>
+                <div className="set-actions">
+                  <button onClick={() => restore(saved.set)}>
+                    <RefreshCw size={16} />
+                    Restore
+                  </button>
+                  <button onClick={() => copy(saved.set.words)}>
+                    <Copy size={16} />
+                    Copy
+                  </button>
+                  <button onClick={() => removeSavedSet(saved.id)}>
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+              </header>
+              <div className="word-strip">
+                {saved.set.words.slice(0, 18).map((entry) => (
+                  <span key={entry.word}>{entry.word}</span>
+                ))}
+              </div>
+              <label className="collection-select">
+                Collection
+                <select
+                  value={saved.collectionId ?? ""}
+                  onChange={(event) => updateSavedCollection(saved.id, event.target.value)}
+                >
+                  <option value="">Unfiled</option>
+                  {collections.map((collection) => (
+                    <option key={collection.id} value={collection.id}>
+                      {collection.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CollectionsView({
+  collections,
+  collectionCounts,
+  collectionName,
+  setCollectionName,
+  createCollection,
+  removeCollection,
+  savedSets,
+}: {
+  collections: Collection[];
+  collectionCounts: Map<string | null, number>;
+  collectionName: string;
+  setCollectionName: (value: string) => void;
+  createCollection: () => void;
+  removeCollection: (id: string) => void;
+  savedSets: SavedSet[];
+}) {
+  return (
+    <section className="main-panel library-panel">
+      <div className="section-head">
+        <div>
+          <h1>Collections</h1>
+          <p>Organize saved word sets for projects and prompts.</p>
+        </div>
+      </div>
+      <div className="collection-create">
+        <input
+          value={collectionName}
+          onChange={(event) => setCollectionName(event.target.value)}
+          placeholder="New collection name"
+        />
+        <button className="primary" onClick={createCollection}>
+          <Plus size={18} />
+          Create
+        </button>
+      </div>
+      <div className="collection-grid">
+        <article className="collection-card">
+          <Folder size={22} />
+          <h2>Unfiled</h2>
+          <p>{collectionCounts.get(null) ?? 0} saved sets</p>
+        </article>
+        {collections.map((collection) => (
+          <article className="collection-card" key={collection.id}>
+            <Folder size={22} />
+            <h2>{collection.name}</h2>
+            <p>{collectionCounts.get(collection.id) ?? 0} saved sets</p>
+            <small>{formatDate(collection.createdAt)}</small>
+            <button className="link danger" onClick={() => removeCollection(collection.id)}>
+              Delete
+            </button>
+          </article>
+        ))}
+      </div>
+      {savedSets.length > 0 && (
+        <div className="collection-note">
+          Assign saved sets to collections from the Saved Sets view.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
+  return (
+    <section className="main-panel library-panel">
+      <div className="section-head">
+        <div>
+          <h1>About data</h1>
+          <p>Build sources and runtime data behavior.</p>
+        </div>
+      </div>
+      <div className="about-grid">
+        <article>
+          <Database size={22} />
+          <h2>Word database</h2>
+          <p>Primary source: {wordDb?.meta?.source ?? "SCOWL/ESDB"}</p>
+          <p>{wordDb?.meta?.records.toLocaleString() ?? "0"} normalized entries</p>
+        </article>
+        <article>
+          <Search size={22} />
+          <h2>Semantic expansion</h2>
+          <p>Datamuse lookups run in the browser and are cached in local storage.</p>
+        </article>
+        <article>
+          <FileText size={22} />
+          <h2>Deployment</h2>
+          <p>The app builds static assets for GitHub Pages through GitHub Actions.</p>
+        </article>
+      </div>
     </section>
   );
 }
@@ -594,13 +1019,39 @@ function posShort(pos: PartOfSpeech) {
   }[pos];
 }
 
-async function copyWords(words: WordEntry[]) {
+async function copyWords(words: WordEntry[], setToast: (message: string) => void) {
   const text = words.map((item) => item.word).join(", ");
   try {
     await navigator.clipboard?.writeText(text);
+    setToast("Copied words to clipboard");
   } catch {
-    console.info("Clipboard write was not allowed by the browser.");
+    setToast("Clipboard permission was denied");
   }
+}
+
+function serializeSets(sets: GeneratedSet[], format: ExportFormat) {
+  if (format === "json") return JSON.stringify({ sets }, null, 2);
+  if (format === "csv") {
+    return [
+      "set,position,word,part_of_speech,source",
+      ...sets.flatMap((set, setIndex) =>
+        set.words.map((entry, wordIndex) =>
+          [setIndex + 1, wordIndex + 1, entry.word, entry.pos, entry.source]
+            .map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`)
+            .join(","),
+        ),
+      ),
+    ].join("\n");
+  }
+  return sets
+    .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => entry.word).join(", ")}`)
+    .join("\n\n");
+}
+
+function exportMime(format: ExportFormat) {
+  if (format === "json") return "application/json";
+  if (format === "csv") return "text/csv";
+  return "text/plain";
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -610,6 +1061,45 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.download = fileName;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function usePersistentState<T>(key: string, initialValue: T) {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (!stored) return initialValue;
+      const parsed = JSON.parse(stored) as T;
+      if (isPlainObject(initialValue) && isPlainObject(parsed)) {
+        return { ...initialValue, ...parsed } as T;
+      }
+      return parsed;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function createId(prefix: string) {
+  return `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 export default App;
