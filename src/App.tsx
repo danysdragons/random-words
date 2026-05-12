@@ -76,6 +76,7 @@ const DEFAULT_FILTERS: Filters = {
   uniqueWords: true,
   excludeOffensive: true,
   noProperNouns: true,
+  noAcronyms: true,
   noContractions: true,
   noHyphenated: true,
   theme: "",
@@ -664,6 +665,7 @@ function CriteriaPanel({
       <Toggle label="Unique words only" checked={filters.uniqueWords} onChange={(checked) => updateFilter("uniqueWords", checked)} />
       <Toggle label="Exclude offensive words" checked={filters.excludeOffensive} onChange={(checked) => updateFilter("excludeOffensive", checked)} />
       <Toggle label="No proper nouns" checked={filters.noProperNouns} onChange={(checked) => updateFilter("noProperNouns", checked)} />
+      <Toggle label="No acronyms / initialisms" checked={filters.noAcronyms} onChange={(checked) => updateFilter("noAcronyms", checked)} />
       <Toggle label="No contractions" checked={filters.noContractions} onChange={(checked) => updateFilter("noContractions", checked)} />
       <Toggle label="No hyphenated words" checked={filters.noHyphenated} onChange={(checked) => updateFilter("noHyphenated", checked)} />
     </aside>
@@ -1062,7 +1064,8 @@ function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
             <p>
               {wordDb.meta.quality.posOverrides.toLocaleString()} POS overrides ·{" "}
               {wordDb.meta.quality.properNounHints.toLocaleString()} proper-noun hints ·{" "}
-              {wordDb.meta.quality.offensiveHints.toLocaleString()} offensive-word hints
+              {wordDb.meta.quality.offensiveHints.toLocaleString()} offensive-word hints ·{" "}
+              {(wordDb.meta.quality.acronymHints ?? 0).toLocaleString()} acronym hints
             </p>
           )}
           {wordDb?.meta?.quality?.frequencyCoreWords && (

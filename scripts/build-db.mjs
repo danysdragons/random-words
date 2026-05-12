@@ -65,6 +65,7 @@ const POS_OVERRIDES = new Map(
 );
 const PROPER_NOUN_HINTS = new Set(QUALITY_DATA.properNounHints.map(normalizeWord));
 const OFFENSIVE_WORDS = new Set(QUALITY_DATA.offensiveWords.map(normalizeWord));
+const ACRONYM_WORDS = new Set(QUALITY_DATA.acronymWords.map(normalizeWord));
 const FREQUENCY_BANDS = {
   core: new Set(QUALITY_DATA.frequencyBands.core.map(normalizeWord)),
   familiar: new Set(QUALITY_DATA.frequencyBands.familiar.map(normalizeWord)),
@@ -95,6 +96,10 @@ function normalizeWord(word) {
     .toLowerCase();
 }
 
+function cleanRawWord(word) {
+  return word.trim().replaceAll("’", "'").normalize("NFKC");
+}
+
 function inferPos(word) {
   const override = POS_OVERRIDES.get(word);
   if (override) return override;
@@ -122,9 +127,26 @@ function qualityScore(record) {
   if (record.hasApostrophe || record.hasHyphen || record.isPhrase) score -= 12;
   if (PROPER_NOUN_HINTS.has(record.word)) score -= 25;
   if (OFFENSIVE_WORDS.has(record.word)) score -= 40;
+  if (record.acronymHint) score -= 24;
   if (record.pos === "noun" || record.pos === "verb" || record.pos === "adjective") score += 6;
   if (record.pos === "other") score -= 12;
   return Math.max(1, Math.min(100, score));
+}
+
+function acronymHint(rawWord, word) {
+  const compactRaw = rawWord.replace(/[^A-Za-z]/g, "");
+  const compactWord = word.replace(/[^a-z]/g, "");
+  if (ACRONYM_WORDS.has(word)) return true;
+  if (rawWord.includes(".") && compactWord.length >= 2 && compactWord.length <= 8) return true;
+  if (
+    compactRaw.length >= 2 &&
+    compactRaw.length <= 8 &&
+    compactRaw === compactRaw.toUpperCase() &&
+    /[A-Z]/.test(compactRaw)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function readPackageWords(pkg) {
@@ -137,7 +159,7 @@ function readPackageWords(pkg) {
   if (!textFile) throw new Error(`No wordlist .txt found in ${zipPath}`);
   return strFromU8(archive[textFile])
     .split(/\r?\n/)
-    .map(normalizeWord)
+    .map(cleanRawWord)
     .filter(Boolean);
 }
 
@@ -157,15 +179,18 @@ function applyWord(recordMap, rawWord, pkg) {
       isPhrase: /\s/.test(word),
       pos: inferPos(word),
       common: false,
+      acronymHint: acronymHint(rawWord, word),
       dialects: new Set(),
     };
 
   existing.dialects.add(pkg.key);
   if (pkg.tier === "common") existing.common = true;
+  if (acronymHint(rawWord, word)) existing.acronymHint = true;
   recordMap.set(word, existing);
 }
 
 function createDatabase(records, sourceCount) {
+  const acronymHintCount = records.filter((record) => record.acronymHint).length;
   const SQL = initSqlJs();
   return SQL.then((SQLModule) => {
     const db = new SQLModule.Database();
@@ -189,6 +214,7 @@ function createDatabase(records, sourceCount) {
         has_hyphen INTEGER NOT NULL,
         proper_noun_hint INTEGER NOT NULL,
         offensive_hint INTEGER NOT NULL,
+        acronym_hint INTEGER NOT NULL,
         frequency_band TEXT NOT NULL,
         quality_score INTEGER NOT NULL,
         dialect_us INTEGER NOT NULL,
@@ -209,9 +235,9 @@ function createDatabase(records, sourceCount) {
     const insert = db.prepare(`
       INSERT INTO words (
         word, normalized, length, commonness, pos, is_phrase, has_apostrophe,
-        has_hyphen, proper_noun_hint, offensive_hint, frequency_band, quality_score,
+        has_hyphen, proper_noun_hint, offensive_hint, acronym_hint, frequency_band, quality_score,
         dialect_us, dialect_gb, dialect_ca, dialect_au, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.run("BEGIN TRANSACTION");
@@ -227,6 +253,7 @@ function createDatabase(records, sourceCount) {
         record.hasHyphen ? 1 : 0,
         PROPER_NOUN_HINTS.has(record.word) ? 1 : 0,
         OFFENSIVE_WORDS.has(record.word) ? 1 : 0,
+        record.acronymHint ? 1 : 0,
         frequencyBand(record.word),
         qualityScore(record),
         record.dialects.has("us") ? 1 : 0,
@@ -247,6 +274,7 @@ function createDatabase(records, sourceCount) {
     metadata.run(["pos_overrides", String(POS_OVERRIDES.size)]);
     metadata.run(["proper_noun_hints", String(PROPER_NOUN_HINTS.size)]);
     metadata.run(["offensive_hints", String(OFFENSIVE_WORDS.size)]);
+    metadata.run(["acronym_hints", String(acronymHintCount)]);
     metadata.run(["frequency_core_words", String(FREQUENCY_BANDS.core.size)]);
     metadata.run(["frequency_familiar_words", String(FREQUENCY_BANDS.familiar.size)]);
     metadata.run(["frequency_niche_penalties", String(FREQUENCY_BANDS.rarePenalty.size)]);
@@ -274,6 +302,7 @@ async function main() {
   }
 
   const sortedRecords = [...records.values()].sort((a, b) => a.word.localeCompare(b.word));
+  const acronymHintCount = sortedRecords.filter((record) => record.acronymHint).length;
   const dbBytes = await createDatabase(sortedRecords, sourceCount);
   writeFileSync(OUT_DB, Buffer.from(dbBytes));
 
@@ -286,6 +315,7 @@ async function main() {
       posOverrides: POS_OVERRIDES.size,
       properNounHints: PROPER_NOUN_HINTS.size,
       offensiveHints: OFFENSIVE_WORDS.size,
+      acronymHints: acronymHintCount,
       frequencyCoreWords: FREQUENCY_BANDS.core.size,
       frequencyFamiliarWords: FREQUENCY_BANDS.familiar.size,
       frequencyNichePenalties: FREQUENCY_BANDS.rarePenalty.size,

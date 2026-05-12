@@ -28,6 +28,7 @@ export interface Filters {
   uniqueWords: boolean;
   excludeOffensive: boolean;
   noProperNouns: boolean;
+  noAcronyms: boolean;
   noContractions: boolean;
   noHyphenated: boolean;
   theme: string;
@@ -87,6 +88,7 @@ export interface BuildMeta {
     posOverrides: number;
     properNounHints: number;
     offensiveHints: number;
+    acronymHints?: number;
     frequencyCoreWords?: number;
     frequencyFamiliarWords?: number;
     frequencyNichePenalties?: number;

@@ -20,6 +20,62 @@ const OFFENSIVE_WORDS = new Set([
   "crap",
 ]);
 
+const ACRONYM_WORDS = new Set([
+  "aa",
+  "ab",
+  "abc",
+  "ad",
+  "ai",
+  "api",
+  "atm",
+  "bc",
+  "cd",
+  "ceo",
+  "cia",
+  "cpu",
+  "dna",
+  "dvd",
+  "eu",
+  "faq",
+  "fbi",
+  "gps",
+  "html",
+  "http",
+  "https",
+  "id",
+  "iq",
+  "irs",
+  "isbn",
+  "jpeg",
+  "jpg",
+  "lcd",
+  "led",
+  "llc",
+  "mp3",
+  "nasa",
+  "nato",
+  "nfl",
+  "nhl",
+  "pdf",
+  "pin",
+  "ram",
+  "rom",
+  "rpm",
+  "sms",
+  "tv",
+  "uk",
+  "un",
+  "url",
+  "usb",
+  "usa",
+  "vat",
+  "vip",
+  "vpn",
+  "vr",
+  "www",
+  "xml",
+]);
+
 export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]> {
   const theme = filters.theme.trim();
   if (!theme) return [];
@@ -129,6 +185,7 @@ function passesClientFilters(entry: WordEntry, filters: Filters) {
   if (filters.endsWith && !entry.word.endsWith(filters.endsWith.toLowerCase())) return false;
   if (filters.noContractions && entry.word.includes("'")) return false;
   if (filters.noHyphenated && entry.word.includes("-")) return false;
+  if (filters.noAcronyms && isAcronymLike(entry.word)) return false;
   if (filters.excludeOffensive && OFFENSIVE_WORDS.has(entry.word)) return false;
 
   const normalized = entry.word.replace(/[^a-z]/g, "");
@@ -139,6 +196,10 @@ function passesClientFilters(entry: WordEntry, filters: Filters) {
     if (normalized.includes(letter)) return false;
   }
   return true;
+}
+
+function isAcronymLike(word: string) {
+  return ACRONYM_WORDS.has(word.toLowerCase().replace(/[^a-z0-9]/g, ""));
 }
 
 function dedupe(words: WordEntry[]) {
