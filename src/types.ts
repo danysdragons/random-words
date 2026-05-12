@@ -13,12 +13,15 @@ export type Dialect = "us" | "gb" | "ca" | "au";
 
 export type SemanticMode = "strict" | "broad" | "related" | "mood";
 
+export type QualityMode = "balanced" | "common" | "surprising";
+
 export interface Filters {
   wordsPerSet: number;
   setCount: number;
   minLength: number;
   maxLength: number;
   includeRare: boolean;
+  qualityMode: QualityMode;
   selectedPos: PartOfSpeech[];
   dialect: Dialect;
   startsWith: string;

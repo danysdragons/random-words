@@ -15,19 +15,26 @@ export function generateSets(
 
   const sets: GeneratedSet[] = [];
   const globalUsed = new Set<string>();
+  const globalRoots = new Set<string>();
   let cursor = 0;
 
   for (let setIndex = 0; setIndex < filters.setCount; setIndex += 1) {
     const words: WordEntry[] = [];
     const localUsed = new Set<string>();
+    const localRoots = new Set<string>();
     while (words.length < filters.wordsPerSet && cursor < shuffled.length) {
       const candidate = shuffled[cursor];
       cursor += 1;
+      const root = familyKey(candidate.word);
       if (localUsed.has(candidate.word)) continue;
-      if (filters.uniqueWords && globalUsed.has(candidate.word)) continue;
+      if (filters.uniqueWords && (globalUsed.has(candidate.word) || localRoots.has(root) || globalRoots.has(root))) {
+        continue;
+      }
       words.push(candidate);
       localUsed.add(candidate.word);
+      localRoots.add(root);
       globalUsed.add(candidate.word);
+      globalRoots.add(root);
     }
     sets.push({
       id: `${seed}-${setIndex}-${Date.now()}`,
@@ -83,8 +90,7 @@ function mulberry32(seed: number) {
 function weightedShuffle(items: WordEntry[], random: () => number, filters: Filters) {
   return items
     .map((item) => {
-      const rawWeight = Math.max(1, item.qualityScore || item.score || 1);
-      const weight = filters.includeRare ? Math.sqrt(rawWeight) * 10 : rawWeight;
+      const weight = qualityWeight(item, filters);
       return {
         item,
         rank: Math.log(Math.max(Number.EPSILON, random())) / weight,
@@ -92,4 +98,25 @@ function weightedShuffle(items: WordEntry[], random: () => number, filters: Filt
     })
     .sort((a, b) => b.rank - a.rank)
     .map(({ item }) => item);
+}
+
+function qualityWeight(item: WordEntry, filters: Filters) {
+  const rawWeight = Math.max(1, item.qualityScore || item.score || 1);
+  if (filters.qualityMode === "common") {
+    return filters.includeRare ? rawWeight * 1.35 : rawWeight * rawWeight;
+  }
+  if (filters.qualityMode === "surprising") {
+    return filters.includeRare ? Math.max(1, Math.sqrt(rawWeight)) : Math.max(1, rawWeight ** 0.7);
+  }
+  return filters.includeRare ? Math.sqrt(rawWeight) * 10 : rawWeight;
+}
+
+function familyKey(word: string) {
+  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized.length < 5) return normalized;
+  if (normalized.endsWith("ing") && normalized.length > 6) return normalized.slice(0, -3);
+  if (normalized.endsWith("ed") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("es") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("s") && normalized.length > 5) return normalized.slice(0, -1);
+  return normalized;
 }

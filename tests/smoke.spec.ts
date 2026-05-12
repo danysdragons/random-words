@@ -4,6 +4,7 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Filtered pool size")).toBeVisible();
+  await expect(page.locator(".metric").filter({ hasText: "Quality mode" })).toContainText("Balanced");
   await expect(page.locator(".metric").filter({ hasText: "Filtered pool size" })).toContainText(
     /\d{1,3}(,\d{3})*/,
   );
@@ -61,6 +62,7 @@ test("round-trips criteria through a share URL", async ({ page }) => {
 
   await page.getByRole("button", { name: "Space Colony" }).click();
   await page.getByRole("button", { name: "Strict category" }).click();
+  await page.getByRole("button", { name: "More surprising" }).click();
   await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page).toHaveURL(/criteria=/);
   const sharedUrl = page.url();
@@ -70,5 +72,6 @@ test("round-trips criteria through a share URL", async ({ page }) => {
 
   await expect(page.getByPlaceholder("e.g. sunken city, cozy village")).toHaveValue("space colony");
   await expect(page.getByRole("button", { name: "Strict category" })).toHaveClass(/active/);
+  await expect(page.getByRole("button", { name: "More surprising" })).toHaveClass(/active/);
   await expect(page.getByText("Loaded shared criteria")).toBeVisible();
 });

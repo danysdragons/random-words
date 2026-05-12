@@ -32,6 +32,7 @@ import type {
   Filters,
   GeneratedSet,
   PartOfSpeech,
+  QualityMode,
   SavedSet,
   SemanticMode,
   WordEntry,
@@ -68,6 +69,7 @@ const DEFAULT_FILTERS: Filters = {
   minLength: 2,
   maxLength: 12,
   includeRare: false,
+  qualityMode: "balanced",
   selectedPos: ["noun", "verb", "adjective"],
   dialect: "us",
   startsWith: "",
@@ -102,6 +104,12 @@ const MODE_LABELS: Record<SemanticMode, string> = {
   broad: "Broad theme",
   related: "Related concepts",
   mood: "Mood / tone",
+};
+
+const QUALITY_LABELS: Record<QualityMode, string> = {
+  balanced: "Balanced",
+  common: "Common first",
+  surprising: "More surprising",
 };
 
 interface HistoryEntry {
@@ -468,6 +476,9 @@ function App() {
                 Commonness <strong>{filters.includeRare ? "Expanded" : "Balanced"}</strong>
               </div>
               <div className="metric">
+                Quality mode <strong>{QUALITY_LABELS[filters.qualityMode]}</strong>
+              </div>
+              <div className="metric">
                 Randomness <strong>{filters.useSeededGeneration ? "Seeded" : "Fresh each click"}</strong>
               </div>
               {semanticPool.length > 0 && (
@@ -641,6 +652,21 @@ function CriteriaPanel({
         checked={filters.includeRare}
         onChange={(checked) => updateFilter("includeRare", checked)}
       />
+
+      <div className="field">
+        <label>Quality mode</label>
+        <div className="segmented">
+          {(Object.keys(QUALITY_LABELS) as QualityMode[]).map((mode) => (
+            <button
+              key={mode}
+              className={filters.qualityMode === mode ? "active" : ""}
+              onClick={() => updateFilter("qualityMode", mode)}
+            >
+              {QUALITY_LABELS[mode]}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="field">
         <div className="field-title">
@@ -1286,7 +1312,7 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
   if (format === "json") return JSON.stringify({ exportedAt, criteria, sets }, null, 2);
   if (format === "csv") {
     return [
-      "exported_at,set,position,word,part_of_speech,frequency_band,quality_score,source,set_theme,criteria_theme,semantic_mode,seed_mode,seed",
+      "exported_at,set,position,word,part_of_speech,frequency_band,quality_score,source,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
       ...sets.flatMap((set, setIndex) =>
         set.words.map((entry, wordIndex) =>
           [
@@ -1301,6 +1327,7 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
             set.theme,
             criteria.theme,
             criteria.semanticMode,
+            criteria.qualityMode,
             criteria.useSeededGeneration ? "seeded" : "fresh",
             criteria.seed,
           ]
@@ -1314,6 +1341,7 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
     `Exported: ${exportedAt}`,
     `Theme: ${criteria.theme || "random"}`,
     `Semantic mode: ${criteria.semanticMode}`,
+    `Quality mode: ${QUALITY_LABELS[criteria.qualityMode]}`,
     `Seed mode: ${criteria.useSeededGeneration ? "seeded" : "fresh each click"}`,
     `Seed: ${criteria.seed}`,
     `Length: ${criteria.minLength}-${criteria.maxLength}`,
@@ -1366,6 +1394,7 @@ function normalizeSharedFilters(payload: unknown): Filters | null {
     minLength: boundedNumber(payload.minLength, DEFAULT_FILTERS.minLength, 1, 30),
     maxLength: boundedNumber(payload.maxLength, DEFAULT_FILTERS.maxLength, 1, 30),
     includeRare: booleanValue(payload.includeRare, DEFAULT_FILTERS.includeRare),
+    qualityMode: qualityModeValue(payload.qualityMode),
     selectedPos: posList(payload.selectedPos),
     dialect: dialectValue(payload.dialect),
     startsWith: stringValue(payload.startsWith),
@@ -1424,6 +1453,12 @@ function semanticModeValue(value: unknown): SemanticMode {
   return value === "strict" || value === "broad" || value === "related" || value === "mood"
     ? value
     : DEFAULT_FILTERS.semanticMode;
+}
+
+function qualityModeValue(value: unknown): QualityMode {
+  return value === "balanced" || value === "common" || value === "surprising"
+    ? value
+    : DEFAULT_FILTERS.qualityMode;
 }
 
 function prepareGenerationFilters(filters: Filters): Filters {
