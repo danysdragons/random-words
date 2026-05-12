@@ -6,7 +6,6 @@ import {
   FileText,
   Folder,
   HelpCircle,
-  History,
   Info,
   Loader2,
   Plus,
@@ -18,10 +17,11 @@ import {
   Sparkles,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { loadWordDatabase, queryWords, type WordDatabase } from "./data";
-import { fetchSemanticWords } from "./datamuse";
+import { fetchDefinitions, fetchSemanticWords } from "./datamuse";
 import { generateSets } from "./generator";
 import type {
   AppView,
@@ -121,6 +121,8 @@ function App() {
   const [collections, setCollections] = usePersistentState<Collection[]>("random-words:collections:v1", []);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("json");
   const [collectionName, setCollectionName] = useState("");
+  const [activeDialog, setActiveDialog] = useState<"help" | "settings" | null>(null);
+  const [definitions, setDefinitions] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("Loading word database...");
   const [toast, setToast] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -146,6 +148,21 @@ function App() {
     const timeout = window.setTimeout(() => setToast(""), 2200);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    const visibleWords = sets.flatMap((set) => set.words.map((entry) => entry.word));
+    if (!visibleWords.length) {
+      setDefinitions({});
+      return;
+    }
+    let active = true;
+    fetchDefinitions(visibleWords).then((nextDefinitions) => {
+      if (active) setDefinitions(nextDefinitions);
+    });
+    return () => {
+      active = false;
+    };
+  }, [sets]);
 
   async function handleGenerate(requestedFilters = filters) {
     if (!wordDb) return;
@@ -279,6 +296,32 @@ function App() {
     );
   }
 
+  function renameCollection(id: string, name: string) {
+    const nextName = name.trim();
+    if (!nextName) return;
+    setCollections((current) =>
+      current.map((collection) =>
+        collection.id === id ? { ...collection, name: nextName } : collection,
+      ),
+    );
+  }
+
+  function clearDatamuseCache() {
+    localStorage.removeItem("random-words:datamuse-cache:v1");
+    localStorage.removeItem("random-words:definition-cache:v1");
+    setDefinitions({});
+    setToast("Cleared semantic and definition cache");
+  }
+
+  function clearWorkspaceData() {
+    setSets([]);
+    setHistory([]);
+    setSavedSets([]);
+    setCollections([]);
+    setSemanticPool([]);
+    setToast("Cleared saved sets, collections, and history");
+  }
+
   function restoreHistory(entry: HistoryEntry) {
     setFilters(entry.filters);
     setSets(entry.sets);
@@ -323,8 +366,12 @@ function App() {
           </button>
         </nav>
         <div className="top-actions">
-          <HelpCircle size={18} />
-          <Settings size={18} />
+          <button onClick={() => setActiveDialog("help")} aria-label="Help">
+            <HelpCircle size={18} />
+          </button>
+          <button onClick={() => setActiveDialog("settings")} aria-label="Settings">
+            <Settings size={18} />
+          </button>
         </div>
       </header>
 
@@ -420,6 +467,7 @@ function App() {
                     key={set.id}
                     set={set}
                     index={index}
+                    definitions={definitions}
                     onCopy={(words) => void copyWords(words, setToast)}
                     onSave={() => saveSet(set, index)}
                     onRegenerate={() => void handleRegenerateSet(index)}
@@ -468,6 +516,7 @@ function App() {
               collectionName={collectionName}
               setCollectionName={setCollectionName}
               createCollection={createCollection}
+              renameCollection={renameCollection}
               removeCollection={removeCollection}
               savedSets={savedSets}
             />
@@ -480,6 +529,18 @@ function App() {
         <span>All DB words are lowercase. Filters apply to normalized forms.</span>
         <span>{generatedWordCount} generated words visible</span>
       </div>
+      {activeDialog === "help" && <HelpDialog close={() => setActiveDialog(null)} />}
+      {activeDialog === "settings" && (
+        <SettingsDialog
+          close={() => setActiveDialog(null)}
+          resetFilters={() => {
+            setFilters(DEFAULT_FILTERS);
+            setToast("Reset generator defaults");
+          }}
+          clearDatamuseCache={clearDatamuseCache}
+          clearWorkspaceData={clearWorkspaceData}
+        />
+      )}
     </div>
   );
 }
@@ -656,11 +717,20 @@ function ThemePanel({
       <div className="field">
         <label>Preset themes</label>
         <div className="preset-grid">
-          {THEME_PRESETS.map((preset) => (
-            <button key={preset} onClick={() => updateFilter("theme", preset.toLowerCase())}>
-              {preset}
-            </button>
-          ))}
+          {THEME_PRESETS.map((preset) => {
+            const selected = normalizeTheme(filters.theme) === normalizeTheme(preset);
+            return (
+              <button
+                key={preset}
+                className={selected ? "selected" : ""}
+                aria-pressed={selected}
+                onClick={() => updateFilter("theme", preset.toLowerCase())}
+              >
+                {selected && <Star size={14} />}
+                {preset}
+              </button>
+            );
+          })}
         </div>
       </div>
       <button className="advanced" onClick={() => setAdvancedOpen((current) => !current)}>
@@ -705,12 +775,14 @@ function ThemePanel({
 function WordSetCard({
   set,
   index,
+  definitions,
   onCopy,
   onSave,
   onRegenerate,
 }: {
   set: GeneratedSet;
   index: number;
+  definitions: Record<string, string>;
   onCopy: (words: WordEntry[]) => void;
   onSave: () => void;
   onRegenerate: () => void;
@@ -739,10 +811,20 @@ function WordSetCard({
       </header>
       <div className="word-grid">
         {set.words.map((entry, wordIndex) => (
-          <div className="word-tile" key={`${entry.word}-${wordIndex}`}>
+          <div
+            className="word-tile"
+            key={`${entry.word}-${wordIndex}`}
+            tabIndex={0}
+            title={definitions[entry.word] || `${entry.word} (${posShort(entry.pos)})`}
+          >
             <span className="word-number">{wordIndex + 1}</span>
             <strong>{entry.word}</strong>
             <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
+            {definitions[entry.word] && (
+              <span className="definition-tooltip" role="tooltip">
+                {definitions[entry.word]}
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -869,6 +951,7 @@ function CollectionsView({
   collectionName,
   setCollectionName,
   createCollection,
+  renameCollection,
   removeCollection,
   savedSets,
 }: {
@@ -877,9 +960,13 @@ function CollectionsView({
   collectionName: string;
   setCollectionName: (value: string) => void;
   createCollection: () => void;
+  renameCollection: (id: string, name: string) => void;
   removeCollection: (id: string) => void;
   savedSets: SavedSet[];
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
   return (
     <section className="main-panel library-panel">
       <div className="section-head">
@@ -908,12 +995,41 @@ function CollectionsView({
         {collections.map((collection) => (
           <article className="collection-card" key={collection.id}>
             <Folder size={22} />
-            <h2>{collection.name}</h2>
+            {editingId === collection.id ? (
+              <div className="rename-row">
+                <input
+                  value={editingName}
+                  onChange={(event) => setEditingName(event.target.value)}
+                  aria-label="Collection name"
+                />
+                <button
+                  onClick={() => {
+                    renameCollection(collection.id, editingName);
+                    setEditingId(null);
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              <h2>{collection.name}</h2>
+            )}
             <p>{collectionCounts.get(collection.id) ?? 0} saved sets</p>
             <small>{formatDate(collection.createdAt)}</small>
-            <button className="link danger" onClick={() => removeCollection(collection.id)}>
-              Delete
-            </button>
+            <div className="card-actions">
+              <button
+                className="link"
+                onClick={() => {
+                  setEditingId(collection.id);
+                  setEditingName(collection.name);
+                }}
+              >
+                Rename
+              </button>
+              <button className="link danger" onClick={() => removeCollection(collection.id)}>
+                Delete
+              </button>
+            </div>
           </article>
         ))}
       </div>
@@ -961,6 +1077,74 @@ function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
         </article>
       </div>
     </section>
+  );
+}
+
+function HelpDialog({ close }: { close: () => void }) {
+  return (
+    <Modal title="Help" close={close}>
+      <div className="dialog-section">
+        <h3>Generating</h3>
+        <p>Use Generate for fresh results. Turn on reproducible seed mode only when you want the same criteria and seed to produce the same sets again.</p>
+      </div>
+      <div className="dialog-section">
+        <h3>Themes</h3>
+        <p>Preset themes and free-entry themes use Datamuse to expand related words. Strict category stays closest to the theme; broad theme mixes semantic matches with the general pool.</p>
+      </div>
+      <div className="dialog-section">
+        <h3>Definitions</h3>
+        <p>Hover or focus a generated word tile to see a short definition when one is available. Definitions are cached locally in this browser.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function SettingsDialog({
+  close,
+  resetFilters,
+  clearDatamuseCache,
+  clearWorkspaceData,
+}: {
+  close: () => void;
+  resetFilters: () => void;
+  clearDatamuseCache: () => void;
+  clearWorkspaceData: () => void;
+}) {
+  return (
+    <Modal title="Settings" close={close}>
+      <div className="settings-actions">
+        <button onClick={resetFilters}>Reset generator defaults</button>
+        <button onClick={clearDatamuseCache}>Clear semantic cache</button>
+        <button className="danger-button" onClick={clearWorkspaceData}>
+          Clear saved workspace data
+        </button>
+      </div>
+      <p className="muted">Settings and saved content are stored locally in this browser. Clearing workspace data removes saved sets, collections, history, and current generated sets.</p>
+    </Modal>
+  );
+}
+
+function Modal({
+  title,
+  close,
+  children,
+}: {
+  title: string;
+  close: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={close}>
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+        <header>
+          <h2>{title}</h2>
+          <button onClick={close} aria-label="Close">
+            <X size={18} />
+          </button>
+        </header>
+        {children}
+      </section>
+    </div>
   );
 }
 
@@ -1045,6 +1229,10 @@ function posShort(pos: PartOfSpeech) {
     interjection: "Int",
     other: "Other",
   }[pos];
+}
+
+function normalizeTheme(value: string) {
+  return value.trim().toLowerCase().replaceAll("&", "and").replace(/\s+/g, " ");
 }
 
 async function copyWords(words: WordEntry[], setToast: (message: string) => void) {

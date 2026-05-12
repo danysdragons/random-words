@@ -8,6 +8,11 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
     /\d{1,3}(,\d{3})*/,
   );
 
+  const oceanPreset = page.getByRole("button", { name: "Ocean Mystery" });
+  await oceanPreset.click();
+  await expect(oceanPreset).toHaveAttribute("aria-pressed", "true");
+  await page.getByPlaceholder("e.g. sunken city, cozy village").fill("");
+
   await page.getByRole("button", { name: "Generate" }).click();
   await expect(page.getByRole("heading", { name: "Set 1" })).toBeVisible();
   await expect(page.locator(".word-tile")).toHaveCount(36);
@@ -23,4 +28,16 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await page.getByPlaceholder("New collection name").fill("Story prompts");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("heading", { name: "Story prompts" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Rename" }).click();
+  await page.getByLabel("Collection name").fill("Campaign prompts");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Campaign prompts" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Help" }).click();
+  await expect(page.getByRole("dialog", { name: "Help" })).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
 });
