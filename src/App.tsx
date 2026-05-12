@@ -7,6 +7,7 @@ import {
   Folder,
   HelpCircle,
   Info,
+  Link,
   Loader2,
   Plus,
   RefreshCw,
@@ -129,6 +130,14 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
+    const sharedFilters = readSharedFiltersFromUrl();
+    if (!sharedFilters) return;
+    setFilters(sharedFilters);
+    setView("generator");
+    setToast("Loaded shared criteria");
+  }, [setFilters, setView]);
+
+  useEffect(() => {
     loadWordDatabase()
       .then((loaded) => {
         setWordDb(loaded);
@@ -242,10 +251,21 @@ function App() {
   }
 
   function exportCurrentSets(format = exportFormat) {
-    const blob = new Blob([serializeSets(sets, format)], {
+    const blob = new Blob([serializeSets(sets, format, filters)], {
       type: exportMime(format),
     });
     downloadBlob(blob, `random-word-sets.${format}`);
+  }
+
+  async function copyShareLink() {
+    const href = createShareUrl(filters);
+    window.history.replaceState(null, "", href);
+    try {
+      await navigator.clipboard?.writeText(href);
+      setToast("Copied share link");
+    } catch {
+      setToast("Share link added to the address bar");
+    }
   }
 
   function saveSet(set: GeneratedSet, index: number) {
@@ -406,6 +426,10 @@ function App() {
               <button onClick={() => setSets([])}>
                 <Trash2 size={18} />
                 Clear
+              </button>
+              <button onClick={() => void copyShareLink()}>
+                <Link size={18} />
+                Copy link
               </button>
               <label className="export-control">
                 <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as ExportFormat)}>
@@ -1256,23 +1280,150 @@ async function copyWords(words: WordEntry[], setToast: (message: string) => void
   }
 }
 
-function serializeSets(sets: GeneratedSet[], format: ExportFormat) {
-  if (format === "json") return JSON.stringify({ sets }, null, 2);
+function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filters) {
+  const exportedAt = new Date().toISOString();
+  const criteria = exportCriteria(filters);
+  if (format === "json") return JSON.stringify({ exportedAt, criteria, sets }, null, 2);
   if (format === "csv") {
     return [
-      "set,position,word,part_of_speech,frequency_band,quality_score,source",
+      "exported_at,set,position,word,part_of_speech,frequency_band,quality_score,source,set_theme,criteria_theme,semantic_mode,seed_mode,seed",
       ...sets.flatMap((set, setIndex) =>
         set.words.map((entry, wordIndex) =>
-          [setIndex + 1, wordIndex + 1, entry.word, entry.pos, entry.frequencyBand, entry.qualityScore, entry.source]
+          [
+            exportedAt,
+            setIndex + 1,
+            wordIndex + 1,
+            entry.word,
+            entry.pos,
+            entry.frequencyBand,
+            entry.qualityScore,
+            entry.source,
+            set.theme,
+            criteria.theme,
+            criteria.semanticMode,
+            criteria.useSeededGeneration ? "seeded" : "fresh",
+            criteria.seed,
+          ]
             .map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`)
             .join(","),
         ),
       ),
     ].join("\n");
   }
-  return sets
+  const criteriaLines = [
+    `Exported: ${exportedAt}`,
+    `Theme: ${criteria.theme || "random"}`,
+    `Semantic mode: ${criteria.semanticMode}`,
+    `Seed mode: ${criteria.useSeededGeneration ? "seeded" : "fresh each click"}`,
+    `Seed: ${criteria.seed}`,
+    `Length: ${criteria.minLength}-${criteria.maxLength}`,
+    `Parts of speech: ${criteria.selectedPos.join(", ") || "any"}`,
+    `Dialect: ${criteria.dialect}`,
+  ].join("\n");
+  return `${criteriaLines}\n\n${sets
     .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => entry.word).join(", ")}`)
-    .join("\n\n");
+    .join("\n\n")}`;
+}
+
+function createShareUrl(filters: Filters) {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.searchParams.set("criteria", encodeSharePayload(filters));
+  return url.href;
+}
+
+function readSharedFiltersFromUrl() {
+  const encoded = new URL(window.location.href).searchParams.get("criteria");
+  if (!encoded) return null;
+  try {
+    const payload = JSON.parse(decodeSharePayload(encoded)) as unknown;
+    return normalizeSharedFilters(payload);
+  } catch {
+    return null;
+  }
+}
+
+function encodeSharePayload(filters: Filters) {
+  const json = JSON.stringify(exportCriteria(filters));
+  const bytes = new TextEncoder().encode(json);
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function decodeSharePayload(encoded: string) {
+  const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(encoded.length / 4) * 4, "=");
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function normalizeSharedFilters(payload: unknown): Filters | null {
+  if (!isPlainObject(payload)) return null;
+  return {
+    ...DEFAULT_FILTERS,
+    wordsPerSet: boundedNumber(payload.wordsPerSet, DEFAULT_FILTERS.wordsPerSet, 1, 40),
+    setCount: boundedNumber(payload.setCount, DEFAULT_FILTERS.setCount, 1, 8),
+    minLength: boundedNumber(payload.minLength, DEFAULT_FILTERS.minLength, 1, 30),
+    maxLength: boundedNumber(payload.maxLength, DEFAULT_FILTERS.maxLength, 1, 30),
+    includeRare: booleanValue(payload.includeRare, DEFAULT_FILTERS.includeRare),
+    selectedPos: posList(payload.selectedPos),
+    dialect: dialectValue(payload.dialect),
+    startsWith: stringValue(payload.startsWith),
+    endsWith: stringValue(payload.endsWith),
+    contains: stringValue(payload.contains),
+    excludes: stringValue(payload.excludes),
+    uniqueWords: booleanValue(payload.uniqueWords, DEFAULT_FILTERS.uniqueWords),
+    excludeOffensive: booleanValue(payload.excludeOffensive, DEFAULT_FILTERS.excludeOffensive),
+    noProperNouns: booleanValue(payload.noProperNouns, DEFAULT_FILTERS.noProperNouns),
+    noAcronyms: booleanValue(payload.noAcronyms, DEFAULT_FILTERS.noAcronyms),
+    noContractions: booleanValue(payload.noContractions, DEFAULT_FILTERS.noContractions),
+    noHyphenated: booleanValue(payload.noHyphenated, DEFAULT_FILTERS.noHyphenated),
+    theme: stringValue(payload.theme),
+    semanticMode: semanticModeValue(payload.semanticMode),
+    includePhrases: booleanValue(payload.includePhrases, DEFAULT_FILTERS.includePhrases),
+    semanticLimit: boundedNumber(payload.semanticLimit, DEFAULT_FILTERS.semanticLimit, 100, 1000),
+    semanticWeight: boundedNumber(payload.semanticWeight, DEFAULT_FILTERS.semanticWeight, 1, 5),
+    fallbackToGeneral: booleanValue(payload.fallbackToGeneral, DEFAULT_FILTERS.fallbackToGeneral),
+    useSeededGeneration: booleanValue(payload.useSeededGeneration, DEFAULT_FILTERS.useSeededGeneration),
+    seed: stringValue(payload.seed) || DEFAULT_FILTERS.seed,
+  };
+}
+
+function exportCriteria(filters: Filters): Filters {
+  return {
+    ...filters,
+    selectedPos: filters.selectedPos.filter((pos) => POS_OPTIONS.includes(pos)),
+  };
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(number)));
+}
+
+function booleanValue(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function posList(value: unknown): PartOfSpeech[] {
+  if (!Array.isArray(value)) return DEFAULT_FILTERS.selectedPos;
+  const selected = value.filter((item): item is PartOfSpeech => POS_OPTIONS.includes(item as PartOfSpeech));
+  return selected.length ? selected : DEFAULT_FILTERS.selectedPos;
+}
+
+function dialectValue(value: unknown): Dialect {
+  return value === "us" || value === "gb" || value === "ca" || value === "au" ? value : DEFAULT_FILTERS.dialect;
+}
+
+function semanticModeValue(value: unknown): SemanticMode {
+  return value === "strict" || value === "broad" || value === "related" || value === "mood"
+    ? value
+    : DEFAULT_FILTERS.semanticMode;
 }
 
 function prepareGenerationFilters(filters: Filters): Filters {

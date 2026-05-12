@@ -54,3 +54,21 @@ test("applies POS filters and exposes acronym filtering", async ({ page }) => {
   await expect(page.locator(".word-tile")).toHaveCount(36);
   await expect(page.locator(".word-tile .pos")).toHaveText(Array(36).fill("V"));
 });
+
+test("round-trips criteria through a share URL", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole("button", { name: "Space Colony" }).click();
+  await page.getByRole("button", { name: "Strict category" }).click();
+  await page.getByRole("button", { name: "Copy link" }).click();
+  await expect(page).toHaveURL(/criteria=/);
+  const sharedUrl = page.url();
+
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(sharedUrl);
+
+  await expect(page.getByPlaceholder("e.g. sunken city, cozy village")).toHaveValue("space colony");
+  await expect(page.getByRole("button", { name: "Strict category" })).toHaveClass(/active/);
+  await expect(page.getByText("Loaded shared criteria")).toBeVisible();
+});
