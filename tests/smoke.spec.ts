@@ -54,6 +54,12 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
   await expect(page.locator(".metric-card").filter({ hasText: "Generated words" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "POS Basis" })).toBeVisible();
+  await expect(page.getByText("36 of 36 rows")).toBeVisible();
+  await page.getByLabel("Filter diagnostics rows").fill("zzzzunlikely");
+  await expect(page.getByText("No diagnostics rows match")).toBeVisible();
+  await page.getByLabel("Filter diagnostics rows").fill("");
+  await page.getByRole("button", { name: "Fallback" }).click();
+  await expect(page.getByText(/of 36 rows/)).toBeVisible();
 });
 
 test("applies POS filters and exposes acronym filtering", async ({ page }) => {

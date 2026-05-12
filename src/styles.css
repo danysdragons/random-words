@@ -970,6 +970,61 @@ input[type="range"] {
   font-size: 14px;
 }
 
+.diagnostic-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 22px;
+}
+
+.diagnostic-search {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding-left: 10px;
+  border: 1px solid #d9d5ce;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.diagnostic-search svg {
+  color: #6d6a64;
+}
+
+.diagnostic-search input {
+  border: 0;
+}
+
+.diagnostic-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diagnostic-filter-group button {
+  min-height: 36px;
+  padding: 0 11px;
+  color: #55524c;
+  background: #fff;
+  border: 1px solid #d9d5ce;
+  border-radius: 7px;
+}
+
+.diagnostic-filter-group button.active {
+  color: #fff;
+  background: #0d8b87;
+  border-color: #0d8b87;
+}
+
+.diagnostic-count {
+  color: #6d6a64;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .diagnostic-table-wrap {
   margin-top: 22px;
   overflow: auto;
@@ -1012,6 +1067,10 @@ input[type="range"] {
   margin-top: 3px;
   color: #6d6a64;
   font-size: 12px;
+}
+
+.compact-empty {
+  min-height: 160px;
 }
 
 .modal-backdrop {

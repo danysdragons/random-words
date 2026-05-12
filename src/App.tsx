@@ -1196,12 +1196,34 @@ function DiagnosticsView({
     generatedSemanticWords: number;
   };
 }) {
+  const [query, setQuery] = useState("");
+  const [rowFilter, setRowFilter] = useState<"all" | "low-confidence" | "semantic" | "datamuse-only" | "fallback">("all");
   const generatedEntries = sets.flatMap((set, setIndex) =>
     set.words.map((entry, wordIndex) => ({ entry, setIndex, wordIndex })),
   );
   const lowConfidenceCount = generatedEntries.filter(({ entry }) => entry.posConfidence < 70).length;
   const datamuseOnlyCount = generatedEntries.filter(({ entry }) => entry.source === "datamuse").length;
   const semanticOutputCount = generatedEntries.filter(({ entry }) => entry.semanticScore).length;
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredEntries = generatedEntries.filter(({ entry }) => {
+    if (rowFilter === "low-confidence" && entry.posConfidence >= 70) return false;
+    if (rowFilter === "semantic" && !entry.semanticScore) return false;
+    if (rowFilter === "datamuse-only" && entry.source !== "datamuse") return false;
+    if (rowFilter === "fallback" && entry.semanticScore) return false;
+    if (!normalizedQuery) return true;
+    return [
+      entry.word,
+      entry.baseForm,
+      entry.pos,
+      entry.alternatePos.join(" "),
+      entry.frequencyBand,
+      entry.source,
+      entry.posSource,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery);
+  });
 
   return (
     <section className="main-panel library-panel diagnostics-panel">
@@ -1261,55 +1283,97 @@ function DiagnosticsView({
           <p>Generate a set, then return here to inspect word metadata and filter behavior.</p>
         </div>
       ) : (
-        <div className="diagnostic-table-wrap">
-          <table className="diagnostic-table">
-            <thead>
-              <tr>
-                <th>Set</th>
-                <th>Word</th>
-                <th>POS</th>
-                <th>POS Basis</th>
-                <th>Quality</th>
-                <th>Semantic</th>
-                <th>Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {generatedEntries.map(({ entry, setIndex, wordIndex }) => (
-                <tr key={`${setIndex}-${wordIndex}-${entry.word}`}>
-                  <td>{setIndex + 1}.{wordIndex + 1}</td>
-                  <td>
-                    <strong>{entry.word}</strong>
-                    {entry.baseForm !== entry.word && <span>base {entry.baseForm}</span>}
-                  </td>
-                  <td>
-                    <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
-                    {(entry.alternatePos?.length ?? 0) > 0 && <span>also {entry.alternatePos.map(posShort).join("/")}</span>}
-                  </td>
-                  <td>
-                    <strong>{posSourceLabel(entry.posSource)}</strong>
-                    <span>{entry.posConfidence}% confidence</span>
-                  </td>
-                  <td>
-                    <strong>{entry.qualityScore}</strong>
-                    <span>{entry.frequencyBand}</span>
-                  </td>
-                  <td>
-                    {entry.semanticScore ? (
-                      <>
-                        <strong>{semanticStrengthLabel(entry.semanticScore)}</strong>
-                        <span>{entry.semanticSource === "local" ? "local metadata" : "Datamuse metadata"}</span>
-                      </>
-                    ) : (
-                      <span>general fallback</span>
-                    )}
-                  </td>
-                  <td>{entry.source === "scowl" ? "SQLite" : "Datamuse"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="diagnostic-controls">
+            <label className="diagnostic-search">
+              <Search size={16} />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Filter rows by word, POS, source, or band"
+                aria-label="Filter diagnostics rows"
+              />
+            </label>
+            <div className="diagnostic-filter-group" aria-label="Diagnostics row filter">
+              <button className={rowFilter === "all" ? "active" : ""} onClick={() => setRowFilter("all")}>
+                All rows
+              </button>
+              <button className={rowFilter === "low-confidence" ? "active" : ""} onClick={() => setRowFilter("low-confidence")}>
+                Low POS
+              </button>
+              <button className={rowFilter === "semantic" ? "active" : ""} onClick={() => setRowFilter("semantic")}>
+                Semantic
+              </button>
+              <button className={rowFilter === "datamuse-only" ? "active" : ""} onClick={() => setRowFilter("datamuse-only")}>
+                Datamuse-only
+              </button>
+              <button className={rowFilter === "fallback" ? "active" : ""} onClick={() => setRowFilter("fallback")}>
+                Fallback
+              </button>
+            </div>
+            <span className="diagnostic-count">
+              {filteredEntries.length.toLocaleString()} of {generatedEntries.length.toLocaleString()} rows
+            </span>
+          </div>
+
+          {filteredEntries.length === 0 ? (
+            <div className="empty-state compact-empty">
+              <Search size={24} />
+              <h2>No diagnostics rows match</h2>
+              <p>Clear the search or switch back to All rows.</p>
+            </div>
+          ) : (
+            <div className="diagnostic-table-wrap">
+              <table className="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>Set</th>
+                    <th>Word</th>
+                    <th>POS</th>
+                    <th>POS Basis</th>
+                    <th>Quality</th>
+                    <th>Semantic</th>
+                    <th>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map(({ entry, setIndex, wordIndex }) => (
+                    <tr key={`${setIndex}-${wordIndex}-${entry.word}`}>
+                      <td>{setIndex + 1}.{wordIndex + 1}</td>
+                      <td>
+                        <strong>{entry.word}</strong>
+                        {entry.baseForm !== entry.word && <span>base {entry.baseForm}</span>}
+                      </td>
+                      <td>
+                        <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
+                        {(entry.alternatePos?.length ?? 0) > 0 && <span>also {entry.alternatePos.map(posShort).join("/")}</span>}
+                      </td>
+                      <td>
+                        <strong>{posSourceLabel(entry.posSource)}</strong>
+                        <span>{entry.posConfidence}% confidence</span>
+                      </td>
+                      <td>
+                        <strong>{entry.qualityScore}</strong>
+                        <span>{entry.frequencyBand}</span>
+                      </td>
+                      <td>
+                        {entry.semanticScore ? (
+                          <>
+                            <strong>{semanticStrengthLabel(entry.semanticScore)}</strong>
+                            <span>{entry.semanticSource === "local" ? "local metadata" : "Datamuse metadata"}</span>
+                          </>
+                        ) : (
+                          <span>general fallback</span>
+                        )}
+                      </td>
+                      <td>{entry.source === "scowl" ? "SQLite" : "Datamuse"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
