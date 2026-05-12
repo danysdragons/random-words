@@ -11,7 +11,15 @@ export type PartOfSpeech =
 
 export type Dialect = "us" | "gb" | "ca" | "au";
 
-export type SemanticMode = "strict" | "broad" | "related" | "mood";
+export type SemanticMode =
+  | "strict"
+  | "broad"
+  | "related"
+  | "mood"
+  | "evocative"
+  | "concrete"
+  | "actions"
+  | "sensory";
 
 export type QualityMode = "balanced" | "common" | "surprising";
 

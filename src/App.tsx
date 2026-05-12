@@ -51,16 +51,18 @@ const POS_OPTIONS: PartOfSpeech[] = [
 ];
 
 const THEME_PRESETS = [
-  "Ocean Mystery",
-  "Forest Adventure",
-  "Ancient Myth",
-  "Space Colony",
-  "Lost Technology",
-  "Cozy Fantasy",
-  "City Night",
-  "Stormy Weather",
-  "Dream Logic",
-  "Tools & Craft",
+  "Haunted House",
+  "Desert Ruins",
+  "Arctic Expedition",
+  "Clockwork City",
+  "Cyberpunk Alley",
+  "Forgotten Library",
+  "Royal Court",
+  "Underworld Journey",
+  "Garden Sanctuary",
+  "Secret Laboratory",
+  "Alien Ecosystem",
+  "Dream Carnival",
 ];
 
 const DEFAULT_FILTERS: Filters = {
@@ -104,6 +106,10 @@ const MODE_LABELS: Record<SemanticMode, string> = {
   broad: "Broad theme",
   related: "Related concepts",
   mood: "Mood / tone",
+  evocative: "Evocative",
+  concrete: "Concrete objects",
+  actions: "Actions & motion",
+  sensory: "Sensory",
 };
 
 const QUALITY_LABELS: Record<QualityMode, string> = {
@@ -1150,7 +1156,7 @@ function HelpDialog({ close }: { close: () => void }) {
       </div>
       <div className="dialog-section">
         <h3>Themes</h3>
-        <p>Preset themes and free-entry themes use Datamuse to expand related words. Strict category stays closest to the theme; broad theme mixes semantic matches with the general pool.</p>
+        <p>Preset themes and free-entry themes use Datamuse to expand related words. Semantic modes tune whether results stay literal, associative, object-focused, action-focused, sensory, or mood-driven.</p>
       </div>
       <div className="dialog-section">
         <h3>Definitions</h3>
@@ -1450,7 +1456,14 @@ function dialectValue(value: unknown): Dialect {
 }
 
 function semanticModeValue(value: unknown): SemanticMode {
-  return value === "strict" || value === "broad" || value === "related" || value === "mood"
+  return value === "strict" ||
+    value === "broad" ||
+    value === "related" ||
+    value === "mood" ||
+    value === "evocative" ||
+    value === "concrete" ||
+    value === "actions" ||
+    value === "sensory"
     ? value
     : DEFAULT_FILTERS.semanticMode;
 }

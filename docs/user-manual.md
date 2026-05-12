@@ -159,6 +159,10 @@ Semantic mode controls how the theme is interpreted.
 - **Broad theme:** blends related theme words with the general pool. This is the default semantic mode.
 - **Related concepts:** emphasizes connected concepts more strongly.
 - **Mood / tone:** looks for words associated with a mood or tone rather than category membership.
+- **Evocative:** favors atmosphere, imagery, and associative words that suggest the theme without needing to name it directly.
+- **Concrete objects:** favors tangible nouns, places, props, materials, and physical things related to the theme.
+- **Actions & motion:** favors verbs and dynamic words connected to movement, change, and activity around the theme.
+- **Sensory:** emphasizes texture, sound, color, scent, taste, temperature, and physical feeling.
 
 ### Include Phrases
 
@@ -172,16 +176,18 @@ Preset themes provide quick starting points. Selecting a preset fills the theme 
 
 Available presets include:
 
-- Ocean Mystery
-- Forest Adventure
-- Ancient Myth
-- Space Colony
-- Lost Technology
-- Cozy Fantasy
-- City Night
-- Stormy Weather
-- Dream Logic
-- Tools & Craft
+- Haunted House
+- Desert Ruins
+- Arctic Expedition
+- Clockwork City
+- Cyberpunk Alley
+- Forgotten Library
+- Royal Court
+- Underworld Journey
+- Garden Sanctuary
+- Secret Laboratory
+- Alien Ecosystem
+- Dream Carnival
 
 ### Advanced Semantic Options
 

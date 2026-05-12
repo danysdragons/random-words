@@ -9,9 +9,9 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
     /\d{1,3}(,\d{3})*/,
   );
 
-  const oceanPreset = page.getByRole("button", { name: "Ocean Mystery" });
-  await oceanPreset.click();
-  await expect(oceanPreset).toHaveAttribute("aria-pressed", "true");
+  const hauntedPreset = page.getByRole("button", { name: "Haunted House" });
+  await hauntedPreset.click();
+  await expect(hauntedPreset).toHaveAttribute("aria-pressed", "true");
   await page.getByPlaceholder("e.g. sunken city, cozy village").fill("");
 
   await page.getByRole("button", { name: "Generate" }).click();
@@ -47,6 +47,9 @@ test("applies POS filters and exposes acronym filtering", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("No acronyms / initialisms")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Concrete objects" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Actions & motion" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sensory" })).toBeVisible();
 
   await page.getByRole("button", { name: "Noun", exact: true }).click();
   await page.getByRole("button", { name: "Adjective", exact: true }).click();
@@ -60,8 +63,8 @@ test("round-trips criteria through a share URL", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
 
-  await page.getByRole("button", { name: "Space Colony" }).click();
-  await page.getByRole("button", { name: "Strict category" }).click();
+  await page.getByRole("button", { name: "Clockwork City" }).click();
+  await page.getByRole("button", { name: "Evocative" }).click();
   await page.getByRole("button", { name: "More surprising" }).click();
   await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page).toHaveURL(/criteria=/);
@@ -70,8 +73,8 @@ test("round-trips criteria through a share URL", async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.goto(sharedUrl);
 
-  await expect(page.getByPlaceholder("e.g. sunken city, cozy village")).toHaveValue("space colony");
-  await expect(page.getByRole("button", { name: "Strict category" })).toHaveClass(/active/);
+  await expect(page.getByPlaceholder("e.g. sunken city, cozy village")).toHaveValue("clockwork city");
+  await expect(page.getByRole("button", { name: "Evocative" })).toHaveClass(/active/);
   await expect(page.getByRole("button", { name: "More surprising" })).toHaveClass(/active/);
   await expect(page.getByText("Loaded shared criteria")).toBeVisible();
 });

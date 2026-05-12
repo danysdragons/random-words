@@ -116,13 +116,13 @@ export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]>
   params.set("max", String(filters.semanticLimit));
   params.set("md", "p");
 
-  if (filters.semanticMode === "mood") {
+  if (filters.semanticMode === "mood" || filters.semanticMode === "evocative") {
     params.set("rel_trg", theme);
+    if (filters.semanticMode === "evocative") params.set("topics", theme);
   } else {
-    params.set("ml", theme);
-    if (filters.semanticMode === "broad" || filters.semanticMode === "related") {
-      params.set("topics", theme);
-    }
+    params.set("ml", semanticQuery(filters));
+    const topics = semanticTopics(filters);
+    if (topics) params.set("topics", topics);
   }
 
   const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`);
@@ -204,6 +204,8 @@ function passesClientFilters(entry: WordEntry, filters: Filters) {
   if (!filters.includePhrases && entry.isPhrase) return false;
   if (entry.length < filters.minLength || entry.length > filters.maxLength) return false;
   if (filters.selectedPos.length && !filters.selectedPos.includes(entry.pos)) return false;
+  if (filters.semanticMode === "concrete" && entry.pos !== "noun") return false;
+  if (filters.semanticMode === "actions" && entry.pos !== "verb") return false;
   if (filters.startsWith && !entry.word.startsWith(filters.startsWith.toLowerCase())) return false;
   if (filters.endsWith && !entry.word.endsWith(filters.endsWith.toLowerCase())) return false;
   if (filters.noContractions && entry.word.includes("'")) return false;
@@ -219,6 +221,23 @@ function passesClientFilters(entry: WordEntry, filters: Filters) {
     if (normalized.includes(letter)) return false;
   }
   return true;
+}
+
+function semanticQuery(filters: Filters) {
+  const theme = filters.theme.trim();
+  if (filters.semanticMode === "concrete") return `${theme} object thing place material`;
+  if (filters.semanticMode === "actions") return `${theme} action motion move`;
+  if (filters.semanticMode === "sensory") return `${theme} texture sound color scent taste temperature`;
+  return theme;
+}
+
+function semanticTopics(filters: Filters) {
+  const theme = filters.theme.trim();
+  if (filters.semanticMode === "strict") return "";
+  if (filters.semanticMode === "concrete") return `${theme},object,place,material`;
+  if (filters.semanticMode === "actions") return `${theme},action,motion`;
+  if (filters.semanticMode === "sensory") return `${theme},texture,sound,color,scent,taste`;
+  return theme;
 }
 
 function isAcronymLike(word: string) {

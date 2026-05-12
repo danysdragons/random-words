@@ -652,7 +652,7 @@ input[type="range"] {
 
 .segmented {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   border: 1px solid #d9d5ce;
   border-radius: 7px;
   overflow: hidden;
@@ -667,6 +667,7 @@ input[type="range"] {
   color: #55524c;
 }
 
+.segmented button:nth-child(4n),
 .segmented button:last-child {
   border-right: 0;
 }

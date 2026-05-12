@@ -54,7 +54,10 @@ function selectPool(basePool: WordEntry[], semanticPool: WordEntry[], filters: F
   const fallback = filters.fallbackToGeneral ? basePool : [];
   if (filters.semanticMode === "strict") return semanticPool.length ? semanticPool : fallback;
   if (filters.semanticMode === "related") return [...weightedSemantic, ...weightedSemantic, ...fallback];
-  if (filters.semanticMode === "mood") return [...weightedSemantic, ...fallback];
+  if (filters.semanticMode === "mood" || filters.semanticMode === "evocative") return [...weightedSemantic, ...fallback];
+  if (filters.semanticMode === "concrete" || filters.semanticMode === "actions" || filters.semanticMode === "sensory") {
+    return [...weightedSemantic, ...weightedSemantic, ...fallback];
+  }
   return [...weightedSemantic, ...fallback, ...fallback];
 }
 
