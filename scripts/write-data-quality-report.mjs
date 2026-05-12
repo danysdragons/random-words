@@ -27,6 +27,7 @@ if (!existsSync(DB_PATH)) {
             COUNT(*) AS records,
             SUM(commonness = 'common') AS common,
             SUM(commonness = 'rare') AS rare,
+            SUM(alternate_pos != '') AS alternate_pos_entries,
             SUM(acronym_hint) AS acronym_hints,
             SUM(proper_noun_hint) AS proper_noun_hints,
             SUM(offensive_hint) AS offensive_hints
@@ -49,6 +50,23 @@ if (!existsSync(DB_PATH)) {
           FROM words
           GROUP BY pos_source
           ORDER BY records DESC
+        `,
+      ),
+    ),
+    "",
+    "## Alternate POS Entries",
+    "",
+    "Curated words that can match more than one POS filter.",
+    "",
+    markdownTable(
+      rows(
+        db,
+        `
+          SELECT word, pos, REPLACE(TRIM(alternate_pos, '|'), '|', ', ') AS alternate_pos, pos_source, frequency_band, quality_score
+          FROM words
+          WHERE alternate_pos != ''
+          ORDER BY frequency_band, word
+          LIMIT 120
         `,
       ),
     ),

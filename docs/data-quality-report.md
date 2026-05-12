@@ -4,9 +4,9 @@ This report is generated from `public/data/words.sqlite` and highlights current 
 
 ## Summary
 
-| records | common | rare | acronym_hints | proper_noun_hints | offensive_hints |
-| --- | --- | --- | --- | --- | --- |
-| 170575 | 111648 | 58927 | 876 | 90 | 15 |
+| records | common | rare | alternate_pos_entries | acronym_hints | proper_noun_hints | offensive_hints |
+| --- | --- | --- | --- | --- | --- | --- |
+| 170575 | 111648 | 58927 | 41 | 876 | 90 | 15 |
 
 ## POS Inference Sources
 
@@ -16,6 +16,54 @@ This report is generated from `public/data/words.sqlite` and highlights current 
 | suffix | 39885 | 55 | 57.8 |
 | morphology | 17879 | 80 | 64.6 |
 | override | 332 | 100 | 73.3 |
+
+## Alternate POS Entries
+
+Curated words that can match more than one POS filter.
+
+| word | pos | alternate_pos | pos_source | frequency_band | quality_score |
+| --- | --- | --- | --- | --- | --- |
+| answer | noun | verb | suffix | core | 100 |
+| balance | noun | verb | suffix | core | 100 |
+| chance | noun | verb | suffix | core | 100 |
+| color | noun | verb | suffix | core | 100 |
+| dream | noun | verb | default | core | 100 |
+| fire | noun | verb | default | core | 100 |
+| flower | noun | verb | suffix | core | 100 |
+| garden | noun | verb | override | core | 100 |
+| harbor | noun | verb | suffix | core | 100 |
+| light | adjective | noun, verb | override | core | 100 |
+| market | noun | verb | default | core | 100 |
+| plant | noun | verb | default | core | 100 |
+| return | noun | verb | default | core | 100 |
+| search | noun | verb | default | core | 100 |
+| shape | noun | verb | default | core | 85 |
+| share | noun | verb | default | core | 100 |
+| travel | noun | verb | default | core | 100 |
+| value | noun | verb | default | core | 100 |
+| water | noun | verb | suffix | core | 100 |
+| weather | noun | verb | suffix | core | 100 |
+| craft | noun | verb | default | familiar | 96 |
+| desert | noun | verb | default | familiar | 96 |
+| design | noun | verb | default | familiar | 96 |
+| echo | noun | verb | default | familiar | 96 |
+| escape | noun | verb | default | familiar | 96 |
+| glowing | verb | adjective | morphology | familiar | 96 |
+| guide | noun | verb | default | familiar | 96 |
+| harvest | noun | verb | default | familiar | 96 |
+| notice | noun | verb | default | familiar | 96 |
+| puzzle | noun | verb | default | familiar | 96 |
+| repair | noun | verb | default | familiar | 96 |
+| shelter | noun | verb | suffix | familiar | 96 |
+| study | noun | verb | override | familiar | 96 |
+| thunder | noun | verb | suffix | familiar | 96 |
+| boring | verb | adjective | morphology | standard | 74 |
+| excited | verb | adjective | morphology | standard | 74 |
+| interesting | verb | adjective | morphology | standard | 66 |
+| painting | verb | noun | morphology | standard | 74 |
+| run | verb | noun | override | standard | 66 |
+| set | verb | adjective, noun | override | standard | 66 |
+| tired | verb | adjective | morphology | standard | 74 |
 
 ## Core Default Noun Fallbacks
 

@@ -57,6 +57,7 @@ export interface WordEntry {
   word: string;
   length: number;
   pos: PartOfSpeech;
+  alternatePos: PartOfSpeech[];
   baseForm: string;
   posSource: "override" | "morphology" | "suffix" | "default" | "datamuse";
   posConfidence: number;
@@ -105,6 +106,7 @@ export interface BuildMeta {
     acronymHints?: number;
     posMorphology?: number;
     posLowConfidence?: number;
+    posAlternates?: number;
     frequencyCoreWords?: number;
     frequencyFamiliarWords?: number;
     frequencyNichePenalties?: number;

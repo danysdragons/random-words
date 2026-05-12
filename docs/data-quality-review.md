@@ -17,6 +17,7 @@ After the current curated override pass:
 
 - Explicit POS overrides: 332 entries.
 - Morphology-derived POS tags: 17,879 entries.
+- Alternate POS entries: 41 entries.
 - Core words still using default noun fallback: 49 entries.
 - Familiar words still using default noun fallback: 29 entries.
 - Core/familiar words still using suffix inference: 29 entries.
@@ -48,7 +49,7 @@ Some words are genuinely multi-role, but the v1 database stores one primary POS 
 - `painting`: verb form or noun
 - `boring`, `interesting`, `tired`, `excited`: verb participles or adjectives
 
-The current approach chooses a single useful primary POS and records the inference source. A future schema can add `alternate_pos` or a normalized `word_pos` table if multi-role filtering becomes important.
+The current approach chooses a single useful primary POS and records the inference source. A curated `alternate_pos` field lets known ambiguous words match additional POS filters. A future normalized `word_pos` table can replace this if broader multi-role filtering becomes important.
 
 ### Default Noun Fallbacks
 
@@ -80,6 +81,6 @@ node --input-type=module -e "import initSqlJs from 'sql.js'; import { readFileSy
 
 ## Next Steps
 
-1. Add an `alternate_pos` field or normalized POS table for genuinely ambiguous words.
-2. Continue conservative overrides for high-frequency words seen in normal generation.
-3. Use POS metadata in optional tile details so power users can inspect base form, source, and confidence.
+1. Continue conservative overrides for high-frequency words seen in normal generation.
+2. Expand `alternate_pos` for well-known multi-role words.
+3. Consider a normalized POS table if curated alternates become too large to maintain by hand.

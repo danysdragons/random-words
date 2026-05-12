@@ -59,9 +59,26 @@ const POS_PATTERNS = [
   { pos: "verb", re: /(ate|en|fy|ise|ize)$/ },
   { pos: "noun", re: /(age|ance|ence|er|hood|ion|ism|ist|ity|ment|ness|or|ship)$/ },
 ];
+const VALID_POS = new Set([
+  "noun",
+  "verb",
+  "adjective",
+  "adverb",
+  "pronoun",
+  "preposition",
+  "conjunction",
+  "interjection",
+  "other",
+]);
 
 const POS_OVERRIDES = new Map(
   Object.entries(QUALITY_DATA.posOverrides).map(([word, pos]) => [normalizeWord(word), pos]),
+);
+const ALTERNATE_POS = new Map(
+  Object.entries(QUALITY_DATA.alternatePos ?? {}).map(([word, values]) => [
+    normalizeWord(word),
+    Array.isArray(values) ? values.map(String) : [],
+  ]),
 );
 const PROPER_NOUN_HINTS = new Set(QUALITY_DATA.properNounHints.map(normalizeWord));
 const OFFENSIVE_WORDS = new Set(QUALITY_DATA.offensiveWords.map(normalizeWord));
@@ -115,6 +132,15 @@ function inferPosMetadata(word, knownWords = new Map()) {
     }
   }
   return { pos: "noun", baseForm: word, posSource: "default", posConfidence: 30 };
+}
+
+function alternatePos(word, primaryPos) {
+  const alternates = ALTERNATE_POS.get(word) ?? [];
+  return [...new Set(alternates.filter((pos) => VALID_POS.has(pos) && pos !== primaryPos))].sort();
+}
+
+function encodeAlternatePos(values) {
+  return values.length ? `|${values.join("|")}|` : "";
 }
 
 function inflectedVerbBase(word, knownWords) {
@@ -248,6 +274,7 @@ function applyWord(recordMap, rawWord, pkg) {
       hasHyphen: word.includes("-"),
       isPhrase: /\s/.test(word),
       pos: "unknown",
+      alternatePos: [],
       baseForm: word,
       posSource: "pending",
       posConfidence: 0,
@@ -282,6 +309,7 @@ function createDatabase(records, sourceCount) {
         length INTEGER NOT NULL,
         commonness TEXT NOT NULL CHECK (commonness IN ('common', 'rare')),
         pos TEXT NOT NULL,
+        alternate_pos TEXT NOT NULL,
         base_form TEXT NOT NULL,
         pos_source TEXT NOT NULL,
         pos_confidence INTEGER NOT NULL,
@@ -303,6 +331,7 @@ function createDatabase(records, sourceCount) {
       CREATE INDEX idx_words_length ON words(length);
       CREATE INDEX idx_words_commonness ON words(commonness);
       CREATE INDEX idx_words_pos ON words(pos);
+      CREATE INDEX idx_words_alternate_pos ON words(alternate_pos);
       CREATE INDEX idx_words_pos_source ON words(pos_source, pos_confidence);
       CREATE INDEX idx_words_quality ON words(quality_score);
       CREATE INDEX idx_words_shape ON words(is_phrase, has_apostrophe, has_hyphen);
@@ -311,10 +340,10 @@ function createDatabase(records, sourceCount) {
 
     const insert = db.prepare(`
       INSERT INTO words (
-        word, normalized, length, commonness, pos, base_form, pos_source, pos_confidence, is_phrase, has_apostrophe,
+        word, normalized, length, commonness, pos, alternate_pos, base_form, pos_source, pos_confidence, is_phrase, has_apostrophe,
         has_hyphen, proper_noun_hint, offensive_hint, acronym_hint, frequency_band, quality_score,
         dialect_us, dialect_gb, dialect_ca, dialect_au, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.run("BEGIN TRANSACTION");
@@ -325,6 +354,7 @@ function createDatabase(records, sourceCount) {
         record.length,
         record.common ? "common" : "rare",
         record.pos,
+        encodeAlternatePos(record.alternatePos),
         record.baseForm,
         record.posSource,
         record.posConfidence,
@@ -357,6 +387,7 @@ function createDatabase(records, sourceCount) {
     metadata.run(["acronym_hints", String(acronymHintCount)]);
     metadata.run(["pos_morphology", String(records.filter((record) => record.posSource === "morphology").length)]);
     metadata.run(["pos_low_confidence", String(records.filter((record) => record.posConfidence < 60).length)]);
+    metadata.run(["pos_alternates", String(records.filter((record) => record.alternatePos.length).length)]);
     metadata.run(["frequency_core_words", String(FREQUENCY_BANDS.core.size)]);
     metadata.run(["frequency_familiar_words", String(FREQUENCY_BANDS.familiar.size)]);
     metadata.run(["frequency_niche_penalties", String(FREQUENCY_BANDS.rarePenalty.size)]);
@@ -384,6 +415,7 @@ async function main() {
   }
   for (const record of records.values()) {
     Object.assign(record, inferPosMetadata(record.word, records));
+    record.alternatePos = alternatePos(record.word, record.pos);
   }
 
   const sortedRecords = [...records.values()].sort((a, b) => a.word.localeCompare(b.word));
@@ -403,6 +435,7 @@ async function main() {
       acronymHints: acronymHintCount,
       posMorphology: sortedRecords.filter((record) => record.posSource === "morphology").length,
       posLowConfidence: sortedRecords.filter((record) => record.posConfidence < 60).length,
+      posAlternates: sortedRecords.filter((record) => record.alternatePos.length).length,
       frequencyCoreWords: FREQUENCY_BANDS.core.size,
       frequencyFamiliarWords: FREQUENCY_BANDS.familiar.size,
       frequencyNichePenalties: FREQUENCY_BANDS.rarePenalty.size,

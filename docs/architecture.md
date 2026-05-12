@@ -126,6 +126,10 @@ The generated `words` table contains one row per normalized word. Key columns in
 - `length`
 - `commonness`
 - `pos`
+- `alternate_pos`
+- `base_form`
+- `pos_source`
+- `pos_confidence`
 - `is_phrase`
 - `has_apostrophe`
 - `has_hyphen`
@@ -142,6 +146,8 @@ Indexes are created for common filtering paths:
 - Length
 - Commonness
 - Part of speech
+- Alternate part of speech
+- POS source and confidence
 - Quality score
 - Shape flags
 - Dialect flags
@@ -179,6 +185,7 @@ flowchart TD
 - `view`
 - `wordDb`
 - `filters`
+- `displaySettings`
 - `basePool`
 - `semanticPool`
 - `sets`

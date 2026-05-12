@@ -81,6 +81,21 @@ test("can show word metadata details on generated tiles", async ({ page }) => {
   await expect(page.locator(".word-details").first()).toContainText(/Curated|Morphology|Suffix|Default|Datamuse/);
 });
 
+test("uses alternate POS entries when filtering generated words", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole("button", { name: "Verb", exact: true }).click();
+  await page.getByRole("button", { name: "Adjective", exact: true }).click();
+  await page.getByPlaceholder("e.g. dr").fill("painting");
+  await page.getByPlaceholder("e.g. ing").fill("painting");
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+
+  await expect(page.locator(".word-tile")).toHaveCount(1);
+  await expect(page.locator(".word-tile strong")).toHaveText("painting");
+  await expect(page.locator(".word-tile .pos")).toHaveText("V");
+});
+
 test("classifies common inflected verb forms as verbs", async () => {
   const SQL = await initSqlJs();
   const db = new SQL.Database(readFileSync("public/data/words.sqlite"));
@@ -125,6 +140,27 @@ test("applies curated POS overrides for high-impact common words", async () => {
   for (const [word, pos] of expected) {
     const result = db.exec("SELECT pos, pos_source, pos_confidence FROM words WHERE word = ?", [word]);
     expect(result[0]?.values[0], `${word} curated POS`).toEqual([pos, "override", 100]);
+  }
+
+  db.close();
+});
+
+test("stores alternate POS metadata for ambiguous words", async () => {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(readFileSync("public/data/words.sqlite"));
+  const expected = new Map([
+    ["painting", "|noun|"],
+    ["light", "|noun|verb|"],
+    ["set", "|adjective|noun|"],
+    ["run", "|noun|"],
+    ["boring", "|adjective|"],
+    ["excited", "|adjective|"],
+    ["glowing", "|adjective|"],
+  ]);
+
+  for (const [word, alternatePos] of expected) {
+    const result = db.exec("SELECT alternate_pos FROM words WHERE word = ?", [word]);
+    expect(result[0]?.values[0]?.[0], `${word} alternate POS`).toBe(alternatePos);
   }
 
   db.close();

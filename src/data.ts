@@ -44,8 +44,11 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
 
   if (!filters.includeRare) where.push("commonness = 'common'");
   if (filters.selectedPos.length > 0 && filters.selectedPos.length < 9) {
-    where.push(`pos IN (${filters.selectedPos.map(() => "?").join(", ")})`);
+    const primaryPlaceholders = filters.selectedPos.map(() => "?").join(", ");
+    const alternateClauses = filters.selectedPos.map(() => "alternate_pos LIKE ?").join(" OR ");
+    where.push(`(pos IN (${primaryPlaceholders}) OR ${alternateClauses})`);
     params.push(...filters.selectedPos);
+    params.push(...filters.selectedPos.map((pos) => `%|${pos}|%`));
   }
   if (filters.startsWith.trim()) {
     where.push("normalized LIKE ?");
@@ -71,7 +74,7 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
 
   const result = db.exec(
     `
-      SELECT id, word, length, pos, commonness, quality_score, frequency_band, base_form, pos_source, pos_confidence
+      SELECT id, word, length, pos, commonness, quality_score, frequency_band, base_form, pos_source, pos_confidence, alternate_pos
       FROM words
       WHERE ${where.join(" AND ")}
       ORDER BY quality_score DESC, word
@@ -88,6 +91,7 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
     baseForm: String(row[7]),
     posSource: normalizePosSource(String(row[8])),
     posConfidence: Number(row[9]),
+    alternatePos: decodeAlternatePos(String(row[10])),
     commonness: row[4] === "rare" ? "rare" : "common",
     source: "scowl",
     score: Number(row[5]),
@@ -95,6 +99,14 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
     frequencyBand: String(row[6]),
     isPhrase: false,
   }));
+}
+
+function decodeAlternatePos(value: string): PartOfSpeech[] {
+  return value
+    .split("|")
+    .filter(Boolean)
+    .map(normalizePos)
+    .filter((pos) => pos !== "other");
 }
 
 function uniqueLetters(value: string) {

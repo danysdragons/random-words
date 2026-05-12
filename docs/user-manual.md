@@ -235,6 +235,13 @@ Word tiles show:
 
 Definitions are loaded from Datamuse and cached locally in your browser. Hover or focus a word tile to view the tooltip.
 
+Turn on **Settings -> Show word details** to show additional data-quality metadata on each tile:
+
+- Base form for inflected words.
+- POS source, such as curated override, morphology, suffix rule, default fallback, or Datamuse.
+- POS confidence.
+- Alternate POS hints when a word is known to work in more than one category.
+
 ### Set Actions
 
 Each set has several actions:

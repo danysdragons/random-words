@@ -357,6 +357,7 @@ function App() {
   function clearDatamuseCache() {
     localStorage.removeItem("random-words:datamuse-cache:v1");
     localStorage.removeItem("random-words:datamuse-cache:v2");
+    localStorage.removeItem("random-words:datamuse-cache:v3");
     localStorage.removeItem("random-words:definition-cache:v1");
     localStorage.removeItem("random-words:definition-cache:v2");
     setDefinitions({});
@@ -905,6 +906,7 @@ function WordSetCard({
             {showDetails && (
               <span className="word-details">
                 {entry.baseForm !== entry.word && `base ${entry.baseForm} · `}
+                {(entry.alternatePos?.length ?? 0) > 0 && `also ${entry.alternatePos.map(posShort).join("/")} · `}
                 {posSourceLabel(entry.posSource)} · {entry.posConfidence}%
               </span>
             )}
@@ -915,6 +917,7 @@ function WordSetCard({
                 {showDetails && (
                   <span className="tooltip-meta">
                     {entry.baseForm !== entry.word ? `Base ${entry.baseForm} · ` : ""}
+                    {(entry.alternatePos?.length ?? 0) > 0 ? `Also ${entry.alternatePos.map(posShort).join("/")} · ` : ""}
                     POS {posSourceLabel(entry.posSource).toLowerCase()} · {entry.posConfidence}% confidence
                   </span>
                 )}
@@ -1170,7 +1173,8 @@ function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
           {wordDb?.meta?.quality?.posMorphology && (
             <p>
               {wordDb.meta.quality.posMorphology.toLocaleString()} morphology-derived POS tags ·{" "}
-              {wordDb.meta.quality.posLowConfidence?.toLocaleString()} low-confidence POS tags
+              {wordDb.meta.quality.posLowConfidence?.toLocaleString()} low-confidence POS tags ·{" "}
+              {(wordDb.meta.quality.posAlternates ?? 0).toLocaleString()} alternate POS entries
             </p>
           )}
         </article>
@@ -1442,7 +1446,7 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
   if (format === "json") return JSON.stringify({ exportedAt, criteria, sets }, null, 2);
   if (format === "csv") {
     return [
-      "exported_at,set,position,word,part_of_speech,frequency_band,quality_score,source,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
+      "exported_at,set,position,word,part_of_speech,alternate_pos,frequency_band,quality_score,source,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
       ...sets.flatMap((set, setIndex) =>
         set.words.map((entry, wordIndex) =>
           [
@@ -1451,6 +1455,7 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
             wordIndex + 1,
             entry.word,
             entry.pos,
+            entry.alternatePos?.join("|") ?? "",
             entry.frequencyBand,
             entry.qualityScore,
             entry.source,

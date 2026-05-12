@@ -9,7 +9,7 @@ interface DatamuseWord {
   defHeadword?: string;
 }
 
-const CACHE_KEY = "random-words:datamuse-cache:v2";
+const CACHE_KEY = "random-words:datamuse-cache:v3";
 const DEFINITION_CACHE_KEY = "random-words:definition-cache:v2";
 const MAX_CACHE_ITEMS = 80;
 const MAX_DEFINITION_CACHE_ITEMS = 600;
@@ -186,6 +186,7 @@ function toEntry(item: DatamuseWord, index: number): WordEntry | null {
     word,
     length: cleanLength,
     pos: normalizePos(posTag ?? "other"),
+    alternatePos: [],
     baseForm: word,
     posSource: "datamuse",
     posConfidence: posTag ? 85 : 35,
