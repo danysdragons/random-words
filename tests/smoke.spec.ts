@@ -91,6 +91,31 @@ test("classifies common inflected verb forms as verbs", async () => {
   db.close();
 });
 
+test("applies curated POS overrides for high-impact common words", async () => {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(readFileSync("public/data/words.sqlite"));
+  const expected = new Map([
+    ["ability", "noun"],
+    ["family", "noun"],
+    ["explore", "verb"],
+    ["discover", "verb"],
+    ["gentle", "adjective"],
+    ["golden", "adjective"],
+    ["lively", "adjective"],
+    ["solve", "verb"],
+    ["transform", "verb"],
+    ["wander", "verb"],
+    ["whisper", "verb"],
+  ]);
+
+  for (const [word, pos] of expected) {
+    const result = db.exec("SELECT pos, pos_source, pos_confidence FROM words WHERE word = ?", [word]);
+    expect(result[0]?.values[0], `${word} curated POS`).toEqual([pos, "override", 100]);
+  }
+
+  db.close();
+});
+
 test("round-trips criteria through a share URL", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
