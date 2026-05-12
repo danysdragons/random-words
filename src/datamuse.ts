@@ -108,8 +108,17 @@ function toEntry(item: DatamuseWord, index: number): WordEntry | null {
     commonness: "common",
     source: "datamuse",
     score: item.score ?? 0,
+    qualityScore: datamuseQuality(item.score ?? 0),
+    frequencyBand: "semantic",
     isPhrase: word.includes(" "),
   };
+}
+
+function datamuseQuality(score: number) {
+  if (score > 50000) return 95;
+  if (score > 10000) return 82;
+  if (score > 2000) return 70;
+  return 55;
 }
 
 function passesClientFilters(entry: WordEntry, filters: Filters) {

@@ -65,6 +65,11 @@ const POS_OVERRIDES = new Map(
 );
 const PROPER_NOUN_HINTS = new Set(QUALITY_DATA.properNounHints.map(normalizeWord));
 const OFFENSIVE_WORDS = new Set(QUALITY_DATA.offensiveWords.map(normalizeWord));
+const FREQUENCY_BANDS = {
+  core: new Set(QUALITY_DATA.frequencyBands.core.map(normalizeWord)),
+  familiar: new Set(QUALITY_DATA.frequencyBands.familiar.map(normalizeWord)),
+  rarePenalty: new Set(QUALITY_DATA.frequencyBands.rarePenalty.map(normalizeWord)),
+};
 
 function sourceUrl(pkg) {
   const fileName = `${pkg.fileStem}.zip`;
@@ -97,6 +102,29 @@ function inferPos(word) {
     if (pattern.re.test(word)) return pattern.pos;
   }
   return "noun";
+}
+
+function frequencyBand(word) {
+  if (FREQUENCY_BANDS.core.has(word)) return "core";
+  if (FREQUENCY_BANDS.familiar.has(word)) return "familiar";
+  if (FREQUENCY_BANDS.rarePenalty.has(word)) return "niche";
+  return "standard";
+}
+
+function qualityScore(record) {
+  let score = record.common ? 60 : 25;
+  const band = frequencyBand(record.word);
+  if (band === "core") score += 35;
+  if (band === "familiar") score += 22;
+  if (band === "niche") score -= 25;
+  if (record.length >= 4 && record.length <= 10) score += 8;
+  if (record.length <= 2) score -= 18;
+  if (record.hasApostrophe || record.hasHyphen || record.isPhrase) score -= 12;
+  if (PROPER_NOUN_HINTS.has(record.word)) score -= 25;
+  if (OFFENSIVE_WORDS.has(record.word)) score -= 40;
+  if (record.pos === "noun" || record.pos === "verb" || record.pos === "adjective") score += 6;
+  if (record.pos === "other") score -= 12;
+  return Math.max(1, Math.min(100, score));
 }
 
 function readPackageWords(pkg) {
@@ -161,6 +189,8 @@ function createDatabase(records, sourceCount) {
         has_hyphen INTEGER NOT NULL,
         proper_noun_hint INTEGER NOT NULL,
         offensive_hint INTEGER NOT NULL,
+        frequency_band TEXT NOT NULL,
+        quality_score INTEGER NOT NULL,
         dialect_us INTEGER NOT NULL,
         dialect_gb INTEGER NOT NULL,
         dialect_ca INTEGER NOT NULL,
@@ -171,6 +201,7 @@ function createDatabase(records, sourceCount) {
       CREATE INDEX idx_words_length ON words(length);
       CREATE INDEX idx_words_commonness ON words(commonness);
       CREATE INDEX idx_words_pos ON words(pos);
+      CREATE INDEX idx_words_quality ON words(quality_score);
       CREATE INDEX idx_words_shape ON words(is_phrase, has_apostrophe, has_hyphen);
       CREATE INDEX idx_words_dialects ON words(dialect_us, dialect_gb, dialect_ca, dialect_au);
     `);
@@ -178,8 +209,9 @@ function createDatabase(records, sourceCount) {
     const insert = db.prepare(`
       INSERT INTO words (
         word, normalized, length, commonness, pos, is_phrase, has_apostrophe,
-        has_hyphen, proper_noun_hint, offensive_hint, dialect_us, dialect_gb, dialect_ca, dialect_au, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        has_hyphen, proper_noun_hint, offensive_hint, frequency_band, quality_score,
+        dialect_us, dialect_gb, dialect_ca, dialect_au, source
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.run("BEGIN TRANSACTION");
@@ -195,6 +227,8 @@ function createDatabase(records, sourceCount) {
         record.hasHyphen ? 1 : 0,
         PROPER_NOUN_HINTS.has(record.word) ? 1 : 0,
         OFFENSIVE_WORDS.has(record.word) ? 1 : 0,
+        frequencyBand(record.word),
+        qualityScore(record),
         record.dialects.has("us") ? 1 : 0,
         record.dialects.has("gb") ? 1 : 0,
         record.dialects.has("ca") ? 1 : 0,
@@ -213,6 +247,9 @@ function createDatabase(records, sourceCount) {
     metadata.run(["pos_overrides", String(POS_OVERRIDES.size)]);
     metadata.run(["proper_noun_hints", String(PROPER_NOUN_HINTS.size)]);
     metadata.run(["offensive_hints", String(OFFENSIVE_WORDS.size)]);
+    metadata.run(["frequency_core_words", String(FREQUENCY_BANDS.core.size)]);
+    metadata.run(["frequency_familiar_words", String(FREQUENCY_BANDS.familiar.size)]);
+    metadata.run(["frequency_niche_penalties", String(FREQUENCY_BANDS.rarePenalty.size)]);
     metadata.free();
 
     return db.export();
@@ -249,6 +286,9 @@ async function main() {
       posOverrides: POS_OVERRIDES.size,
       properNounHints: PROPER_NOUN_HINTS.size,
       offensiveHints: OFFENSIVE_WORDS.size,
+      frequencyCoreWords: FREQUENCY_BANDS.core.size,
+      frequencyFamiliarWords: FREQUENCY_BANDS.familiar.size,
+      frequencyNichePenalties: FREQUENCY_BANDS.rarePenalty.size,
     },
     dialects: DIALECTS.map(({ key, label }) => ({ key, label })),
   };

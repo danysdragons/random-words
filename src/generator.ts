@@ -11,7 +11,7 @@ export function generateSets(
   const random = mulberry32(seed);
   const semanticWords = mergeSemantic(basePool, semanticPool);
   const pool = selectPool(basePool, semanticWords, filters);
-  const shuffled = shuffle(pool.filter((word) => clientSafe(word, filters)), random);
+  const shuffled = weightedShuffle(pool.filter((word) => clientSafe(word, filters)), random, filters);
 
   const sets: GeneratedSet[] = [];
   const globalUsed = new Set<string>();
@@ -80,11 +80,16 @@ function mulberry32(seed: number) {
   };
 }
 
-function shuffle<T>(items: T[], random: () => number) {
-  const copy = [...items];
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(random() * (index + 1));
-    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
-  }
-  return copy;
+function weightedShuffle(items: WordEntry[], random: () => number, filters: Filters) {
+  return items
+    .map((item) => {
+      const rawWeight = Math.max(1, item.qualityScore || item.score || 1);
+      const weight = filters.includeRare ? Math.sqrt(rawWeight) * 10 : rawWeight;
+      return {
+        item,
+        rank: Math.log(Math.max(Number.EPSILON, random())) / weight,
+      };
+    })
+    .sort((a, b) => b.rank - a.rank)
+    .map(({ item }) => item);
 }

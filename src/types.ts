@@ -48,6 +48,8 @@ export interface WordEntry {
   commonness: "common" | "rare";
   source: "scowl" | "datamuse";
   score: number;
+  qualityScore: number;
+  frequencyBand: string;
   isPhrase: boolean;
 }
 
@@ -85,5 +87,8 @@ export interface BuildMeta {
     posOverrides: number;
     properNounHints: number;
     offensiveHints: number;
+    frequencyCoreWords?: number;
+    frequencyFamiliarWords?: number;
+    frequencyNichePenalties?: number;
   };
 }

@@ -70,10 +70,10 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
 
   const result = db.exec(
     `
-      SELECT id, word, length, pos, commonness
+      SELECT id, word, length, pos, commonness, quality_score, frequency_band
       FROM words
       WHERE ${where.join(" AND ")}
-      ORDER BY word
+      ORDER BY quality_score DESC, word
     `,
     params,
   );
@@ -86,7 +86,9 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
     pos: normalizePos(String(row[3])),
     commonness: row[4] === "rare" ? "rare" : "common",
     source: "scowl",
-    score: 1,
+    score: Number(row[5]),
+    qualityScore: Number(row[5]),
+    frequencyBand: String(row[6]),
     isPhrase: false,
   }));
 }

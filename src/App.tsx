@@ -822,6 +822,7 @@ function WordSetCard({
             <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
             {definitions[entry.word] && (
               <span className="definition-tooltip" role="tooltip">
+                <strong>{entry.frequencyBand}</strong>
                 {definitions[entry.word]}
               </span>
             )}
@@ -1064,6 +1065,13 @@ function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
               {wordDb.meta.quality.offensiveHints.toLocaleString()} offensive-word hints
             </p>
           )}
+          {wordDb?.meta?.quality?.frequencyCoreWords && (
+            <p>
+              {wordDb.meta.quality.frequencyCoreWords.toLocaleString()} core words ·{" "}
+              {wordDb.meta.quality.frequencyFamiliarWords?.toLocaleString()} familiar words ·{" "}
+              {wordDb.meta.quality.frequencyNichePenalties?.toLocaleString()} niche penalties
+            </p>
+          )}
         </article>
         <article>
           <Search size={22} />
@@ -1249,10 +1257,10 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat) {
   if (format === "json") return JSON.stringify({ sets }, null, 2);
   if (format === "csv") {
     return [
-      "set,position,word,part_of_speech,source",
+      "set,position,word,part_of_speech,frequency_band,quality_score,source",
       ...sets.flatMap((set, setIndex) =>
         set.words.map((entry, wordIndex) =>
-          [setIndex + 1, wordIndex + 1, entry.word, entry.pos, entry.source]
+          [setIndex + 1, wordIndex + 1, entry.word, entry.pos, entry.frequencyBand, entry.qualityScore, entry.source]
             .map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`)
             .join(","),
         ),
