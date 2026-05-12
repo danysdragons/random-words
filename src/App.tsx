@@ -98,10 +98,39 @@ const DEFAULT_FILTERS: Filters = {
 
 interface DisplaySettings {
   showWordDetails: boolean;
+  uiTheme: UiTheme;
 }
 
 const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showWordDetails: false,
+  uiTheme: "system",
+};
+
+type UiTheme =
+  | "system"
+  | "light"
+  | "dark"
+  | "high-contrast"
+  | "ink"
+  | "forest"
+  | "ocean"
+  | "sunrise"
+  | "solar-light"
+  | "solar-dark";
+
+type ResolvedUiTheme = Exclude<UiTheme, "system">;
+
+const UI_THEME_LABELS: Record<UiTheme, string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark",
+  "high-contrast": "High Contrast",
+  ink: "Ink",
+  forest: "Forest",
+  ocean: "Ocean",
+  sunrise: "Sunrise",
+  "solar-light": "Solar Light",
+  "solar-dark": "Solar Dark",
 };
 
 const DIALECT_LABELS: Record<Dialect, string> = {
@@ -156,6 +185,21 @@ function App() {
   const [status, setStatus] = useState("Loading word database...");
   const [toast, setToast] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
+  const activeUiTheme = resolveUiTheme(displaySettings.uiTheme, systemPrefersDark);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    setSystemPrefersDark(media.matches);
+    const handleChange = (event: MediaQueryListEvent) => setSystemPrefersDark(event.matches);
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.uiTheme = activeUiTheme;
+    document.documentElement.style.colorScheme = activeUiTheme === "light" || activeUiTheme === "solar-light" ? "light" : "dark";
+  }, [activeUiTheme]);
 
   useEffect(() => {
     const sharedFilters = readSharedFiltersFromUrl();
@@ -428,7 +472,7 @@ function App() {
   }, [savedSets]);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-ui-theme={activeUiTheme}>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">RW</div>
@@ -666,6 +710,7 @@ function App() {
           clearWorkspaceData={clearWorkspaceData}
           displaySettings={displaySettings}
           updateDisplaySettings={setDisplaySettings}
+          activeUiTheme={activeUiTheme}
         />
       )}
     </div>
@@ -1585,6 +1630,7 @@ function SettingsDialog({
   clearWorkspaceData,
   displaySettings,
   updateDisplaySettings,
+  activeUiTheme,
 }: {
   close: () => void;
   resetFilters: () => void;
@@ -1592,11 +1638,31 @@ function SettingsDialog({
   clearWorkspaceData: () => void;
   displaySettings: DisplaySettings;
   updateDisplaySettings: (settings: DisplaySettings) => void;
+  activeUiTheme: ResolvedUiTheme;
 }) {
   return (
     <Modal title="Settings" close={close}>
       <div className="dialog-section">
         <h3>Display</h3>
+        <div className="field compact">
+          <label htmlFor="ui-theme-select">UI theme</label>
+          <select
+            id="ui-theme-select"
+            value={displaySettings.uiTheme}
+            onChange={(event) => updateDisplaySettings({ ...displaySettings, uiTheme: uiThemeValue(event.target.value) })}
+          >
+            {(Object.keys(UI_THEME_LABELS) as UiTheme[]).map((theme) => (
+              <option key={theme} value={theme}>
+                {UI_THEME_LABELS[theme]}
+              </option>
+            ))}
+          </select>
+          <p className="muted">
+            {displaySettings.uiTheme === "system"
+              ? `Following system preference: ${UI_THEME_LABELS[activeUiTheme]}.`
+              : `${UI_THEME_LABELS[displaySettings.uiTheme]} is pinned for this browser.`}
+          </p>
+        </div>
         <Toggle
           label="Show word details"
           checked={displaySettings.showWordDetails}
@@ -2061,6 +2127,15 @@ function qualityModeValue(value: unknown): QualityMode {
   return value === "balanced" || value === "common" || value === "surprising"
     ? value
     : DEFAULT_FILTERS.qualityMode;
+}
+
+function uiThemeValue(value: unknown): UiTheme {
+  return typeof value === "string" && value in UI_THEME_LABELS ? (value as UiTheme) : DEFAULT_DISPLAY_SETTINGS.uiTheme;
+}
+
+function resolveUiTheme(theme: UiTheme, systemPrefersDark: boolean): ResolvedUiTheme {
+  if (theme === "system") return systemPrefersDark ? "dark" : "light";
+  return theme;
 }
 
 function prepareGenerationFilters(filters: Filters): Filters {
