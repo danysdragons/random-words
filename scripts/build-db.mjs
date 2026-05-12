@@ -100,19 +100,26 @@ function cleanRawWord(word) {
   return word.trim().replaceAll("’", "'").normalize("NFKC");
 }
 
-function inferPos(word, knownWords = new Map()) {
+function inferPosMetadata(word, knownWords = new Map()) {
   const override = POS_OVERRIDES.get(word);
-  if (override) return override;
-  if (isInflectedVerb(word, knownWords)) return "verb";
-  for (const pattern of POS_PATTERNS) {
-    if (pattern.re.test(word)) return pattern.pos;
+  if (override) {
+    return { pos: override, baseForm: word, posSource: "override", posConfidence: 100 };
   }
-  return "noun";
+  const verbBase = inflectedVerbBase(word, knownWords);
+  if (verbBase) {
+    return { pos: "verb", baseForm: verbBase, posSource: "morphology", posConfidence: 80 };
+  }
+  for (const pattern of POS_PATTERNS) {
+    if (pattern.re.test(word)) {
+      return { pos: pattern.pos, baseForm: word, posSource: "suffix", posConfidence: 55 };
+    }
+  }
+  return { pos: "noun", baseForm: word, posSource: "default", posConfidence: 30 };
 }
 
-function isInflectedVerb(word, knownWords) {
-  if (!/^[a-z]+$/.test(word) || word.length < 4) return false;
-  return verbBaseCandidates(word).some((base) => isPlausibleVerbBase(word, base, knownWords));
+function inflectedVerbBase(word, knownWords) {
+  if (!/^[a-z]+$/.test(word) || word.length < 4) return "";
+  return verbBaseCandidates(word).find((base) => isPlausibleVerbBase(word, base, knownWords)) ?? "";
 }
 
 function verbBaseCandidates(word) {
@@ -122,14 +129,14 @@ function verbBaseCandidates(word) {
   }
   if (word.endsWith("ed") && word.length > 3) {
     const stem = word.slice(0, -2);
-    candidates.add(stem);
     candidates.add(`${stem}e`);
+    candidates.add(stem);
     if (hasDoubledFinalConsonant(stem)) candidates.add(stem.slice(0, -1));
   }
   if (word.endsWith("ing") && word.length > 5) {
     const stem = word.slice(0, -3);
-    candidates.add(stem);
     candidates.add(`${stem}e`);
+    candidates.add(stem);
     if (hasDoubledFinalConsonant(stem)) candidates.add(stem.slice(0, -1));
   }
   return [...candidates];
@@ -144,7 +151,32 @@ function hasDoubledFinalConsonant(word) {
 function isPlausibleVerbBase(word, base, knownWords) {
   if (!base || base === word || base.length < 2) return false;
   if (POS_OVERRIDES.get(base) === "verb") return true;
-  return knownWords.has(base);
+  if (!knownWords.has(base)) return false;
+  return verbInflections(base).some((inflection) => inflection !== word && knownWords.has(inflection));
+}
+
+function verbInflections(base) {
+  const forms = new Set();
+  if (base.endsWith("y") && !/[aeiou]y$/.test(base)) {
+    forms.add(`${base.slice(0, -1)}ied`);
+  } else if (base.endsWith("e")) {
+    forms.add(`${base}d`);
+    forms.add(`${base.slice(0, -1)}ing`);
+  } else {
+    forms.add(`${base}ed`);
+    forms.add(`${base}ing`);
+  }
+  if (shouldDoubleFinalConsonant(base)) {
+    forms.add(`${base}${base.at(-1)}ed`);
+    forms.add(`${base}${base.at(-1)}ing`);
+  }
+  return [...forms];
+}
+
+function shouldDoubleFinalConsonant(word) {
+  if (word.length < 3) return false;
+  const [antepenultimate, penultimate, last] = word.slice(-3);
+  return /[bcdfghjklmnpqrstvwxz]/.test(antepenultimate) && /[aeiou]/.test(penultimate) && /[bcdfghjklmnpqrstvwxz]/.test(last);
 }
 
 function frequencyBand(word) {
@@ -216,6 +248,9 @@ function applyWord(recordMap, rawWord, pkg) {
       hasHyphen: word.includes("-"),
       isPhrase: /\s/.test(word),
       pos: "unknown",
+      baseForm: word,
+      posSource: "pending",
+      posConfidence: 0,
       common: false,
       acronymHint: acronymHint(rawWord, word),
       dialects: new Set(),
@@ -247,6 +282,9 @@ function createDatabase(records, sourceCount) {
         length INTEGER NOT NULL,
         commonness TEXT NOT NULL CHECK (commonness IN ('common', 'rare')),
         pos TEXT NOT NULL,
+        base_form TEXT NOT NULL,
+        pos_source TEXT NOT NULL,
+        pos_confidence INTEGER NOT NULL,
         is_phrase INTEGER NOT NULL,
         has_apostrophe INTEGER NOT NULL,
         has_hyphen INTEGER NOT NULL,
@@ -265,6 +303,7 @@ function createDatabase(records, sourceCount) {
       CREATE INDEX idx_words_length ON words(length);
       CREATE INDEX idx_words_commonness ON words(commonness);
       CREATE INDEX idx_words_pos ON words(pos);
+      CREATE INDEX idx_words_pos_source ON words(pos_source, pos_confidence);
       CREATE INDEX idx_words_quality ON words(quality_score);
       CREATE INDEX idx_words_shape ON words(is_phrase, has_apostrophe, has_hyphen);
       CREATE INDEX idx_words_dialects ON words(dialect_us, dialect_gb, dialect_ca, dialect_au);
@@ -272,10 +311,10 @@ function createDatabase(records, sourceCount) {
 
     const insert = db.prepare(`
       INSERT INTO words (
-        word, normalized, length, commonness, pos, is_phrase, has_apostrophe,
+        word, normalized, length, commonness, pos, base_form, pos_source, pos_confidence, is_phrase, has_apostrophe,
         has_hyphen, proper_noun_hint, offensive_hint, acronym_hint, frequency_band, quality_score,
         dialect_us, dialect_gb, dialect_ca, dialect_au, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.run("BEGIN TRANSACTION");
@@ -286,6 +325,9 @@ function createDatabase(records, sourceCount) {
         record.length,
         record.common ? "common" : "rare",
         record.pos,
+        record.baseForm,
+        record.posSource,
+        record.posConfidence,
         record.isPhrase ? 1 : 0,
         record.hasApostrophe ? 1 : 0,
         record.hasHyphen ? 1 : 0,
@@ -313,6 +355,8 @@ function createDatabase(records, sourceCount) {
     metadata.run(["proper_noun_hints", String(PROPER_NOUN_HINTS.size)]);
     metadata.run(["offensive_hints", String(OFFENSIVE_WORDS.size)]);
     metadata.run(["acronym_hints", String(acronymHintCount)]);
+    metadata.run(["pos_morphology", String(records.filter((record) => record.posSource === "morphology").length)]);
+    metadata.run(["pos_low_confidence", String(records.filter((record) => record.posConfidence < 60).length)]);
     metadata.run(["frequency_core_words", String(FREQUENCY_BANDS.core.size)]);
     metadata.run(["frequency_familiar_words", String(FREQUENCY_BANDS.familiar.size)]);
     metadata.run(["frequency_niche_penalties", String(FREQUENCY_BANDS.rarePenalty.size)]);
@@ -339,7 +383,7 @@ async function main() {
     for (const word of words) applyWord(records, word, pkg);
   }
   for (const record of records.values()) {
-    record.pos = inferPos(record.word, records);
+    Object.assign(record, inferPosMetadata(record.word, records));
   }
 
   const sortedRecords = [...records.values()].sort((a, b) => a.word.localeCompare(b.word));
@@ -357,6 +401,8 @@ async function main() {
       properNounHints: PROPER_NOUN_HINTS.size,
       offensiveHints: OFFENSIVE_WORDS.size,
       acronymHints: acronymHintCount,
+      posMorphology: sortedRecords.filter((record) => record.posSource === "morphology").length,
+      posLowConfidence: sortedRecords.filter((record) => record.posConfidence < 60).length,
       frequencyCoreWords: FREQUENCY_BANDS.core.size,
       frequencyFamiliarWords: FREQUENCY_BANDS.familiar.size,
       frequencyNichePenalties: FREQUENCY_BANDS.rarePenalty.size,

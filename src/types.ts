@@ -57,6 +57,9 @@ export interface WordEntry {
   word: string;
   length: number;
   pos: PartOfSpeech;
+  baseForm: string;
+  posSource: "override" | "morphology" | "suffix" | "default" | "datamuse";
+  posConfidence: number;
   commonness: "common" | "rare";
   source: "scowl" | "datamuse";
   score: number;
@@ -100,6 +103,8 @@ export interface BuildMeta {
     properNounHints: number;
     offensiveHints: number;
     acronymHints?: number;
+    posMorphology?: number;
+    posLowConfidence?: number;
     frequencyCoreWords?: number;
     frequencyFamiliarWords?: number;
     frequencyNichePenalties?: number;

@@ -70,22 +70,22 @@ test("applies POS filters and exposes acronym filtering", async ({ page }) => {
 test("classifies common inflected verb forms as verbs", async () => {
   const SQL = await initSqlJs();
   const db = new SQL.Database(readFileSync("public/data/words.sqlite"));
-  const verbForms = [
-    "hugged",
-    "hugging",
-    "played",
-    "playing",
-    "walked",
-    "walking",
-    "moved",
-    "moving",
-    "created",
-    "creating",
-  ];
+  const verbForms = new Map([
+    ["hugged", "hug"],
+    ["hugging", "hug"],
+    ["played", "play"],
+    ["playing", "play"],
+    ["walked", "walk"],
+    ["walking", "walk"],
+    ["moved", "move"],
+    ["moving", "move"],
+    ["created", "create"],
+    ["creating", "create"],
+  ]);
 
-  for (const word of verbForms) {
-    const result = db.exec("SELECT pos FROM words WHERE word = ?", [word]);
-    expect(result[0]?.values[0]?.[0], `${word} POS`).toBe("verb");
+  for (const [word, baseForm] of verbForms) {
+    const result = db.exec("SELECT pos, base_form, pos_source, pos_confidence FROM words WHERE word = ?", [word]);
+    expect(result[0]?.values[0], `${word} POS metadata`).toEqual(["verb", baseForm, "morphology", 80]);
   }
 
   db.close();

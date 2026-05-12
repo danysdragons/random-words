@@ -175,13 +175,13 @@ function App() {
   }, [toast]);
 
   useEffect(() => {
-    const visibleWords = sets.flatMap((set) => set.words.map((entry) => entry.word));
-    if (!visibleWords.length) {
+    const visibleEntries = sets.flatMap((set) => set.words);
+    if (!visibleEntries.length) {
       setDefinitions({});
       return;
     }
     let active = true;
-    fetchDefinitions(visibleWords).then((nextDefinitions) => {
+    fetchDefinitions(visibleEntries).then((nextDefinitions) => {
       if (active) setDefinitions(nextDefinitions);
     });
     return () => {
@@ -344,7 +344,9 @@ function App() {
 
   function clearDatamuseCache() {
     localStorage.removeItem("random-words:datamuse-cache:v1");
+    localStorage.removeItem("random-words:datamuse-cache:v2");
     localStorage.removeItem("random-words:definition-cache:v1");
+    localStorage.removeItem("random-words:definition-cache:v2");
     setDefinitions({});
     setToast("Cleared semantic and definition cache");
   }
@@ -1134,6 +1136,12 @@ function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
               {wordDb.meta.quality.frequencyCoreWords.toLocaleString()} core words ·{" "}
               {wordDb.meta.quality.frequencyFamiliarWords?.toLocaleString()} familiar words ·{" "}
               {wordDb.meta.quality.frequencyNichePenalties?.toLocaleString()} niche penalties
+            </p>
+          )}
+          {wordDb?.meta?.quality?.posMorphology && (
+            <p>
+              {wordDb.meta.quality.posMorphology.toLocaleString()} morphology-derived POS tags ·{" "}
+              {wordDb.meta.quality.posLowConfidence?.toLocaleString()} low-confidence POS tags
             </p>
           )}
         </article>

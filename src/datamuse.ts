@@ -9,8 +9,8 @@ interface DatamuseWord {
   defHeadword?: string;
 }
 
-const CACHE_KEY = "random-words:datamuse-cache:v1";
-const DEFINITION_CACHE_KEY = "random-words:definition-cache:v1";
+const CACHE_KEY = "random-words:datamuse-cache:v2";
+const DEFINITION_CACHE_KEY = "random-words:definition-cache:v2";
 const MAX_CACHE_ITEMS = 80;
 const MAX_DEFINITION_CACHE_ITEMS = 600;
 
@@ -140,15 +140,16 @@ export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]>
   return cache[key];
 }
 
-export async function fetchDefinitions(words: string[]): Promise<Record<string, string>> {
-  const uniqueWords = [...new Set(words.map((word) => word.trim().toLowerCase()).filter(Boolean))];
-  if (!uniqueWords.length) return {};
+export async function fetchDefinitions(entries: WordEntry[]): Promise<Record<string, string>> {
+  const uniqueEntries = dedupeDefinitionEntries(entries);
+  if (!uniqueEntries.length) return {};
 
   const cache = readDefinitionCache();
-  const missing = uniqueWords.filter((word) => cache[word] === undefined);
+  const missing = uniqueEntries.filter((entry) => cache[definitionCacheKey(entry)] === undefined);
   const resolved: Record<string, string> = {};
 
-  for (const word of missing.slice(0, 80)) {
+  for (const requested of missing.slice(0, 80)) {
+    const word = requested.word.trim().toLowerCase();
     const params = new URLSearchParams({
       sp: word,
       qe: "sp",
@@ -159,17 +160,18 @@ export async function fetchDefinitions(words: string[]): Promise<Record<string, 
       const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`);
       if (!response.ok) continue;
       const [entry] = (await response.json()) as DatamuseWord[];
-      cache[word] = formatDefinition(entry);
+      cache[definitionCacheKey(requested)] = formatDefinition(entry, requested);
     } catch {
-      cache[word] = "";
+      cache[definitionCacheKey(requested)] = "";
     }
   }
 
   trimDefinitionCache(cache);
   localStorage.setItem(DEFINITION_CACHE_KEY, JSON.stringify(cache));
 
-  for (const word of uniqueWords) {
-    if (cache[word]) resolved[word] = cache[word];
+  for (const entry of uniqueEntries) {
+    const definition = cache[definitionCacheKey(entry)];
+    if (definition) resolved[entry.word] = definition;
   }
   return resolved;
 }
@@ -184,6 +186,9 @@ function toEntry(item: DatamuseWord, index: number): WordEntry | null {
     word,
     length: cleanLength,
     pos: normalizePos(posTag ?? "other"),
+    baseForm: word,
+    posSource: "datamuse",
+    posConfidence: posTag ? 85 : 35,
     commonness: "common",
     source: "datamuse",
     score: item.score ?? 0,
@@ -268,12 +273,46 @@ function trimCache(cache: Record<string, WordEntry[]>) {
   }
 }
 
-function formatDefinition(entry?: DatamuseWord) {
-  const definition = entry?.defs?.[0];
+function dedupeDefinitionEntries(entries: WordEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const word = entry.word.trim().toLowerCase();
+    if (!word) return false;
+    const key = definitionCacheKey(entry);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function definitionCacheKey(entry: WordEntry | string) {
+  if (typeof entry === "string") return `${entry}|other|${entry}`;
+  return `${entry.word}|${entry.pos}|${entry.baseForm || entry.word}`;
+}
+
+function formatDefinition(entry: DatamuseWord | undefined, requested: WordEntry) {
+  const definition = selectDefinition(entry, requested);
   if (!definition) return "";
   const [, text = definition] = definition.split("\t");
-  const headword = entry.defHeadword && entry.defHeadword !== entry.word ? `${entry.defHeadword}: ` : "";
+  const headword = entry?.defHeadword && entry.defHeadword !== requested.word ? `${entry.defHeadword}: ` : "";
   return `${headword}${text}`;
+}
+
+function selectDefinition(entry: DatamuseWord | undefined, requested: WordEntry) {
+  if (!entry?.defs?.length) return "";
+  const targetTag = definitionPosTag(requested.pos);
+  const matching = targetTag ? entry.defs.find((definition) => definition.startsWith(`${targetTag}\t`)) : "";
+  if (matching) return matching;
+  if (requested.posSource === "morphology") return "";
+  return entry.defs[0] ?? "";
+}
+
+function definitionPosTag(pos: WordEntry["pos"]) {
+  if (pos === "noun") return "n";
+  if (pos === "verb") return "v";
+  if (pos === "adjective") return "adj";
+  if (pos === "adverb") return "adv";
+  return "";
 }
 
 function readDefinitionCache(): Record<string, string> {

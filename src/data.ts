@@ -71,7 +71,7 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
 
   const result = db.exec(
     `
-      SELECT id, word, length, pos, commonness, quality_score, frequency_band
+      SELECT id, word, length, pos, commonness, quality_score, frequency_band, base_form, pos_source, pos_confidence
       FROM words
       WHERE ${where.join(" AND ")}
       ORDER BY quality_score DESC, word
@@ -85,6 +85,9 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
     word: String(row[1]),
     length: Number(row[2]),
     pos: normalizePos(String(row[3])),
+    baseForm: String(row[7]),
+    posSource: normalizePosSource(String(row[8])),
+    posConfidence: Number(row[9]),
     commonness: row[4] === "rare" ? "rare" : "common",
     source: "scowl",
     score: Number(row[5]),
@@ -96,6 +99,13 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
 
 function uniqueLetters(value: string) {
   return [...new Set(value.toLowerCase().replace(/[^a-z]/g, "").split(""))];
+}
+
+function normalizePosSource(value: string): WordEntry["posSource"] {
+  if (value === "override" || value === "morphology" || value === "suffix" || value === "default" || value === "datamuse") {
+    return value;
+  }
+  return "default";
 }
 
 export function normalizePos(value: string): PartOfSpeech {

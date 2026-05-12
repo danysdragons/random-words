@@ -37,6 +37,21 @@ if (!existsSync(DB_PATH)) {
     `,
   );
 
+  section("POS Inference Sources");
+  printRows(
+    db,
+    `
+      SELECT
+        pos_source,
+        COUNT(*) AS records,
+        ROUND(AVG(pos_confidence), 1) AS avg_confidence,
+        ROUND(AVG(quality_score), 1) AS avg_quality
+      FROM words
+      GROUP BY pos_source
+      ORDER BY records DESC
+    `,
+  );
+
   section("Default Pool Shape");
   printRows(
     db,
@@ -164,6 +179,28 @@ if (!existsSync(DB_PATH)) {
       ["without", "preposition"],
       ["would", "verb"],
     ]),
+  );
+
+  section("Ambiguous POS Review Candidates");
+  printRows(
+    db,
+    `
+      SELECT word, pos, base_form, pos_source, pos_confidence, frequency_band, quality_score
+      FROM words
+      WHERE
+        commonness = 'common'
+        AND is_phrase = 0
+        AND (
+          pos_source = 'morphology'
+          OR word IN ('painting', 'boring', 'interesting', 'tired', 'excited', 'light', 'set', 'run')
+        )
+      ORDER BY
+        CASE WHEN word IN ('painting', 'boring', 'interesting', 'tired', 'excited', 'light', 'set', 'run') THEN 0 ELSE 1 END,
+        pos_source,
+        quality_score DESC,
+        word
+      LIMIT 120
+    `,
   );
 }
 
