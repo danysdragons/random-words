@@ -18,6 +18,7 @@ import {
   Sparkles,
   Star,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -282,6 +283,27 @@ function App() {
       type: exportMime(format),
     });
     downloadBlob(blob, `random-word-sets.${format}`);
+  }
+
+  function exportSavedWorkspace() {
+    const blob = new Blob([serializeSavedWorkspace(savedSets, collections)], {
+      type: "application/json",
+    });
+    downloadBlob(blob, "random-words-library.json");
+  }
+
+  async function importSavedWorkspace(file: File | null) {
+    if (!file) return;
+    try {
+      const imported = parseSavedWorkspace(await file.text());
+      setCollections((current) => mergeById(current, imported.collections));
+      setSavedSets((current) => mergeById(current, imported.savedSets));
+      setToast(
+        `Imported ${imported.savedSets.length} saved sets and ${imported.collections.length} collections`,
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to import saved library.");
+    }
   }
 
   async function copyShareLink() {
@@ -592,6 +614,8 @@ function App() {
             <SavedSetsView
               savedSets={savedSets}
               collections={collections}
+              importWorkspace={(file) => void importSavedWorkspace(file)}
+              exportWorkspace={exportSavedWorkspace}
               updateSavedCollection={updateSavedCollection}
               removeSavedSet={removeSavedSet}
               restore={(set) => {
@@ -1006,6 +1030,8 @@ function HistoryPanel({
 function SavedSetsView({
   savedSets,
   collections,
+  importWorkspace,
+  exportWorkspace,
   updateSavedCollection,
   removeSavedSet,
   restore,
@@ -1013,6 +1039,8 @@ function SavedSetsView({
 }: {
   savedSets: SavedSet[];
   collections: Collection[];
+  importWorkspace: (file: File | null) => void;
+  exportWorkspace: () => void;
   updateSavedCollection: (savedId: string, collectionId: string) => void;
   removeSavedSet: (id: string) => void;
   restore: (set: GeneratedSet) => void;
@@ -1024,6 +1052,25 @@ function SavedSetsView({
         <div>
           <h1>Saved sets</h1>
           <p>{savedSets.length} saved word sets</p>
+        </div>
+        <div className="library-actions">
+          <label className="file-button">
+            <Upload size={16} />
+            Import library
+            <input
+              type="file"
+              accept="application/json,.json"
+              aria-label="Import saved library"
+              onChange={(event) => {
+                importWorkspace(event.target.files?.[0] ?? null);
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <button onClick={exportWorkspace} disabled={savedSets.length === 0 && collections.length === 0}>
+            <Download size={16} />
+            Export library
+          </button>
         </div>
       </div>
       {savedSets.length === 0 ? (
@@ -1744,6 +1791,129 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
   return `${criteriaLines}\n\n${sets
     .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => entry.word).join(", ")}`)
     .join("\n\n")}`;
+}
+
+function serializeSavedWorkspace(savedSets: SavedSet[], collections: Collection[]) {
+  return JSON.stringify(
+    {
+      app: "random-words",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      collections,
+      savedSets,
+    },
+    null,
+    2,
+  );
+}
+
+function parseSavedWorkspace(text: string) {
+  const payload = JSON.parse(text) as unknown;
+  if (!isPlainObject(payload)) throw new Error("Import file is not a valid Random Words library.");
+  const collections = arrayValue(payload.collections)
+    .map(normalizeImportedCollection)
+    .filter((collection): collection is Collection => Boolean(collection));
+  const savedSets = arrayValue(payload.savedSets)
+    .map(normalizeImportedSavedSet)
+    .filter((saved): saved is SavedSet => Boolean(saved));
+  if (!collections.length && !savedSets.length) {
+    throw new Error("Import file did not contain saved sets or collections.");
+  }
+  return { collections, savedSets };
+}
+
+function normalizeImportedCollection(value: unknown): Collection | null {
+  if (!isPlainObject(value)) return null;
+  const id = stringValue(value.id).trim() || createId("collection");
+  const name = stringValue(value.name).trim();
+  if (!name) return null;
+  return {
+    id,
+    name,
+    createdAt: parseDateString(value.createdAt) ?? new Date().toISOString(),
+  };
+}
+
+function normalizeImportedSavedSet(value: unknown): SavedSet | null {
+  if (!isPlainObject(value)) return null;
+  const set = normalizeImportedGeneratedSet(value.set);
+  if (!set) return null;
+  return {
+    id: stringValue(value.id).trim() || createId("saved"),
+    name: stringValue(value.name).trim() || `${set.theme || "Imported"} Set`,
+    set,
+    savedAt: parseDateString(value.savedAt) ?? new Date().toISOString(),
+    collectionId: stringValue(value.collectionId).trim() || null,
+  };
+}
+
+function normalizeImportedGeneratedSet(value: unknown): GeneratedSet | null {
+  if (!isPlainObject(value)) return null;
+  const words = arrayValue(value.words)
+    .map(normalizeImportedWordEntry)
+    .filter((entry): entry is WordEntry => Boolean(entry));
+  if (!words.length) return null;
+  return {
+    id: stringValue(value.id).trim() || createId("set"),
+    words,
+    theme: stringValue(value.theme),
+    createdAt: parseDateString(value.createdAt) ?? new Date().toISOString(),
+  };
+}
+
+function normalizeImportedWordEntry(value: unknown): WordEntry | null {
+  if (!isPlainObject(value)) return null;
+  const word = stringValue(value.word).trim().toLowerCase();
+  if (!word) return null;
+  const pos = POS_OPTIONS.includes(value.pos as PartOfSpeech) ? (value.pos as PartOfSpeech) : "other";
+  return {
+    id: boundedNumber(value.id, -Date.now(), Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER),
+    word,
+    length: boundedNumber(value.length, word.replace(/[^a-z]/g, "").length, 0, 100),
+    pos,
+    alternatePos: importedPosList(value.alternatePos),
+    baseForm: stringValue(value.baseForm).trim() || word,
+    posSource: posSourceValue(value.posSource),
+    posConfidence: boundedNumber(value.posConfidence, 30, 0, 100),
+    commonness: value.commonness === "rare" ? "rare" : "common",
+    source: value.source === "datamuse" ? "datamuse" : "scowl",
+    score: boundedNumber(value.score, 0, 0, Number.MAX_SAFE_INTEGER),
+    qualityScore: boundedNumber(value.qualityScore, 1, 0, 100),
+    semanticScore: optionalNumber(value.semanticScore),
+    semanticSource: value.semanticSource === "datamuse" ? "datamuse" : value.semanticSource === "local" ? "local" : undefined,
+    frequencyBand: stringValue(value.frequencyBand).trim() || "imported",
+    isPhrase: Boolean(value.isPhrase),
+  };
+}
+
+function mergeById<T extends { id: string }>(current: T[], imported: T[]) {
+  const existing = new Set(current.map((item) => item.id));
+  return [...current, ...imported.filter((item) => !existing.has(item.id))];
+}
+
+function importedPosList(value: unknown): PartOfSpeech[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is PartOfSpeech => POS_OPTIONS.includes(item as PartOfSpeech));
+}
+
+function arrayValue(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function parseDateString(value: unknown) {
+  const text = stringValue(value);
+  return Number.isNaN(Date.parse(text)) ? null : text;
+}
+
+function optionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function posSourceValue(value: unknown): WordEntry["posSource"] {
+  if (value === "override" || value === "morphology" || value === "suffix" || value === "default" || value === "datamuse") {
+    return value;
+  }
+  return "default";
 }
 
 function createShareUrl(filters: Filters) {

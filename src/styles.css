@@ -822,6 +822,45 @@ input[type="range"] {
   font-size: 13px;
 }
 
+.library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.library-actions button,
+.file-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: #242827;
+  background: #fff;
+  border: 1px solid #d9d5ce;
+  border-radius: 7px;
+  font-size: 14px;
+}
+
+.library-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.file-button {
+  cursor: pointer;
+}
+
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .word-strip {
   display: flex;
   flex-wrap: wrap;

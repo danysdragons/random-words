@@ -37,6 +37,24 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Campaign prompts" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Saved Sets" }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export library" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("random-words-library.json");
+  const importPath = "test-results/random-words-library.json";
+  await download.saveAs(importPath);
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Clear saved workspace data" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("heading", { name: "No saved sets yet" })).toBeVisible();
+  await page.getByLabel("Import saved library").setInputFiles(importPath);
+  await expect(page.getByText("Random Set 1")).toBeVisible();
+  await expect(page.getByLabel("Collection")).toContainText("Campaign prompts");
+  await page.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByRole("heading", { name: "Set 1" })).toBeVisible();
+
   await page.getByRole("button", { name: "Help" }).click();
   await expect(page.getByRole("dialog", { name: "Help" })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
@@ -54,12 +72,12 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
   await expect(page.locator(".metric-card").filter({ hasText: "Generated words" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "POS Basis" })).toBeVisible();
-  await expect(page.getByText("36 of 36 rows")).toBeVisible();
+  await expect(page.getByText("12 of 12 rows")).toBeVisible();
   await page.getByLabel("Filter diagnostics rows").fill("zzzzunlikely");
   await expect(page.getByText("No diagnostics rows match")).toBeVisible();
   await page.getByLabel("Filter diagnostics rows").fill("");
   await page.getByRole("button", { name: "Fallback" }).click();
-  await expect(page.getByText(/of 36 rows/)).toBeVisible();
+  await expect(page.getByText(/of 12 rows/)).toBeVisible();
 });
 
 test("applies POS filters and exposes acronym filtering", async ({ page }) => {
