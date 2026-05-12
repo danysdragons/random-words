@@ -5,6 +5,7 @@ A static random English word and phrase set generator backed by a generated SQLi
 ## Documentation
 
 - [User manual](docs/user-manual.md)
+- [Architecture and data flows](docs/architecture.md)
 
 ## Development
 
