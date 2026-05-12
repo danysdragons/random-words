@@ -13,6 +13,7 @@ const SOURCE_BASE = `https://sourceforge.net/projects/wordlist/files/speller/${V
 const RAW_DIR = resolve("data/raw/scowl");
 const OUT_DB = resolve("public/data/words.sqlite");
 const OUT_META = resolve("public/data/build-meta.json");
+const QUALITY_DATA = JSON.parse(readFileSync(resolve("data/quality/word-quality.json"), "utf8"));
 
 const DIALECTS = [
   { key: "us", label: "American English", code: "en_US" },
@@ -59,17 +60,11 @@ const POS_PATTERNS = [
   { pos: "noun", re: /(age|ance|ence|er|hood|ion|ism|ist|ity|ment|ness|or|ship)$/ },
 ];
 
-const PROPER_NOUN_HINTS = new Set([
-  "america",
-  "american",
-  "britain",
-  "british",
-  "canada",
-  "canadian",
-  "australia",
-  "australian",
-  "english",
-]);
+const POS_OVERRIDES = new Map(
+  Object.entries(QUALITY_DATA.posOverrides).map(([word, pos]) => [normalizeWord(word), pos]),
+);
+const PROPER_NOUN_HINTS = new Set(QUALITY_DATA.properNounHints.map(normalizeWord));
+const OFFENSIVE_WORDS = new Set(QUALITY_DATA.offensiveWords.map(normalizeWord));
 
 function sourceUrl(pkg) {
   const fileName = `${pkg.fileStem}.zip`;
@@ -96,6 +91,8 @@ function normalizeWord(word) {
 }
 
 function inferPos(word) {
+  const override = POS_OVERRIDES.get(word);
+  if (override) return override;
   for (const pattern of POS_PATTERNS) {
     if (pattern.re.test(word)) return pattern.pos;
   }
@@ -163,6 +160,7 @@ function createDatabase(records, sourceCount) {
         has_apostrophe INTEGER NOT NULL,
         has_hyphen INTEGER NOT NULL,
         proper_noun_hint INTEGER NOT NULL,
+        offensive_hint INTEGER NOT NULL,
         dialect_us INTEGER NOT NULL,
         dialect_gb INTEGER NOT NULL,
         dialect_ca INTEGER NOT NULL,
@@ -180,8 +178,8 @@ function createDatabase(records, sourceCount) {
     const insert = db.prepare(`
       INSERT INTO words (
         word, normalized, length, commonness, pos, is_phrase, has_apostrophe,
-        has_hyphen, proper_noun_hint, dialect_us, dialect_gb, dialect_ca, dialect_au, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        has_hyphen, proper_noun_hint, offensive_hint, dialect_us, dialect_gb, dialect_ca, dialect_au, source
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.run("BEGIN TRANSACTION");
@@ -196,6 +194,7 @@ function createDatabase(records, sourceCount) {
         record.hasApostrophe ? 1 : 0,
         record.hasHyphen ? 1 : 0,
         PROPER_NOUN_HINTS.has(record.word) ? 1 : 0,
+        OFFENSIVE_WORDS.has(record.word) ? 1 : 0,
         record.dialects.has("us") ? 1 : 0,
         record.dialects.has("gb") ? 1 : 0,
         record.dialects.has("ca") ? 1 : 0,
@@ -211,6 +210,9 @@ function createDatabase(records, sourceCount) {
     metadata.run(["generated_at", new Date().toISOString()]);
     metadata.run(["records", String(records.length)]);
     metadata.run(["source_entries", String(sourceCount)]);
+    metadata.run(["pos_overrides", String(POS_OVERRIDES.size)]);
+    metadata.run(["proper_noun_hints", String(PROPER_NOUN_HINTS.size)]);
+    metadata.run(["offensive_hints", String(OFFENSIVE_WORDS.size)]);
     metadata.free();
 
     return db.export();
@@ -243,6 +245,11 @@ async function main() {
     generatedAt: new Date().toISOString(),
     records: sortedRecords.length,
     sourceEntries: sourceCount,
+    quality: {
+      posOverrides: POS_OVERRIDES.size,
+      properNounHints: PROPER_NOUN_HINTS.size,
+      offensiveHints: OFFENSIVE_WORDS.size,
+    },
     dialects: DIALECTS.map(({ key, label }) => ({ key, label })),
   };
   writeFileSync(OUT_META, `${JSON.stringify(meta, null, 2)}\n`);

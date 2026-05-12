@@ -66,6 +66,7 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
   if (filters.noContractions) where.push("has_apostrophe = 0");
   if (filters.noHyphenated) where.push("has_hyphen = 0");
   if (filters.noProperNouns) where.push("proper_noun_hint = 0");
+  if (filters.excludeOffensive) where.push("offensive_hint = 0");
 
   const result = db.exec(
     `

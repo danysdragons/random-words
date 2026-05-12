@@ -941,6 +941,13 @@ function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
           <h2>Word database</h2>
           <p>Primary source: {wordDb?.meta?.source ?? "SCOWL/ESDB"}</p>
           <p>{wordDb?.meta?.records.toLocaleString() ?? "0"} normalized entries</p>
+          {wordDb?.meta?.quality && (
+            <p>
+              {wordDb.meta.quality.posOverrides.toLocaleString()} POS overrides ·{" "}
+              {wordDb.meta.quality.properNounHints.toLocaleString()} proper-noun hints ·{" "}
+              {wordDb.meta.quality.offensiveHints.toLocaleString()} offensive-word hints
+            </p>
+          )}
         </article>
         <article>
           <Search size={22} />

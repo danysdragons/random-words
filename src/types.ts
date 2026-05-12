@@ -81,4 +81,9 @@ export interface BuildMeta {
   generatedAt: string;
   records: number;
   sourceEntries: number;
+  quality?: {
+    posOverrides: number;
+    properNounHints: number;
+    offensiveHints: number;
+  };
 }
