@@ -138,6 +138,24 @@ test("shows semantic pool provenance for themed generation", async ({ page }) =>
   await expect(page.locator(".metric").filter({ hasText: "Themed output" })).toBeVisible();
 });
 
+test("keeps primary workflows usable on a narrow viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+
+  await expect(page.getByRole("button", { name: "Generator" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Saved Sets" })).toBeVisible();
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  await expect(page.locator(".word-tile")).toHaveCount(36);
+
+  const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(horizontalOverflow).toBe(false);
+
+  await page.getByRole("button", { name: "Diagnostics" }).click();
+  await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
+  await expect(page.getByLabel("Filter diagnostics rows")).toBeVisible();
+});
+
 test("uses alternate POS entries when filtering generated words", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
