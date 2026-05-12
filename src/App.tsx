@@ -21,7 +21,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { loadWordDatabase, queryWords, type WordDatabase } from "./data";
 import { fetchDefinitions, fetchSemanticWords } from "./datamuse";
 import { generateSets } from "./generator";
@@ -437,23 +437,23 @@ function App() {
             <span>Word & phrase sets for creators</span>
           </div>
         </div>
-        <nav>
-          <button className={view === "generator" ? "active" : ""} onClick={() => setView("generator")}>
+        <nav aria-label="Primary">
+          <button className={view === "generator" ? "active" : ""} aria-current={view === "generator" ? "page" : undefined} onClick={() => setView("generator")}>
             Generator
           </button>
-          <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}>
+          <button className={view === "saved" ? "active" : ""} aria-current={view === "saved" ? "page" : undefined} onClick={() => setView("saved")}>
             Saved Sets
           </button>
-          <button className={view === "collections" ? "active" : ""} onClick={() => setView("collections")}>
+          <button className={view === "collections" ? "active" : undefined} aria-current={view === "collections" ? "page" : undefined} onClick={() => setView("collections")}>
             Collections
           </button>
-          <button className={view === "diagnostics" ? "active" : ""} onClick={() => setView("diagnostics")}>
+          <button className={view === "diagnostics" ? "active" : ""} aria-current={view === "diagnostics" ? "page" : undefined} onClick={() => setView("diagnostics")}>
             Diagnostics
           </button>
-          <button className={view === "about" ? "active" : ""} onClick={() => setView("about")}>
+          <button className={view === "about" ? "active" : ""} aria-current={view === "about" ? "page" : undefined} onClick={() => setView("about")}>
             About Data
           </button>
-          <button className={view === "manual" ? "active" : ""} onClick={() => setView("manual")}>
+          <button className={view === "manual" ? "active" : ""} aria-current={view === "manual" ? "page" : undefined} onClick={() => setView("manual")}>
             Manual
           </button>
         </nav>
@@ -565,7 +565,7 @@ function App() {
               )}
             </div>
 
-            {(status || toast) && <div className="notice">{toast || status}</div>}
+            {(status || toast) && <div className="notice" role="status">{toast || status}</div>}
 
             <div className="sets">
               {sets.length === 0 ? (
@@ -713,6 +713,7 @@ function CriteriaPanel({
             type="number"
             min={1}
             max={30}
+            aria-label="Minimum word length"
             value={filters.minLength}
             onChange={(event) => updateFilter("minLength", Number(event.target.value))}
           />
@@ -720,6 +721,7 @@ function CriteriaPanel({
             type="range"
             min={1}
             max={30}
+            aria-label="Maximum word length"
             value={filters.maxLength}
             onChange={(event) => updateFilter("maxLength", Number(event.target.value))}
           />
@@ -727,6 +729,7 @@ function CriteriaPanel({
             type="number"
             min={1}
             max={30}
+            aria-label="Maximum word length"
             value={filters.maxLength}
             onChange={(event) => updateFilter("maxLength", Number(event.target.value))}
           />
@@ -746,11 +749,12 @@ function CriteriaPanel({
 
       <div className="field">
         <label>Quality mode</label>
-        <div className="segmented">
+        <div className="segmented" role="group" aria-label="Quality mode">
           {(Object.keys(QUALITY_LABELS) as QualityMode[]).map((mode) => (
             <button
               key={mode}
               className={filters.qualityMode === mode ? "active" : ""}
+              aria-pressed={filters.qualityMode === mode}
               onClick={() => updateFilter("qualityMode", mode)}
             >
               {QUALITY_LABELS[mode]}
@@ -771,6 +775,7 @@ function CriteriaPanel({
             <button
               key={pos}
               className={filters.selectedPos.includes(pos) ? "chip selected" : "chip"}
+              aria-pressed={filters.selectedPos.includes(pos)}
               onClick={() => {
                 const next = filters.selectedPos.includes(pos)
                   ? filters.selectedPos.filter((item) => item !== pos)
@@ -787,6 +792,7 @@ function CriteriaPanel({
       <div className="field">
         <label>Dialect / variety</label>
         <select
+          aria-label="Dialect / variety"
           value={filters.dialect}
           onChange={(event) => updateFilter("dialect", event.target.value as Dialect)}
         >
@@ -830,6 +836,7 @@ function ThemePanel({
         <div className="search-input">
           <Search size={16} />
           <input
+            aria-label="Theme / idea"
             value={filters.theme}
             onChange={(event) => updateFilter("theme", event.target.value)}
             placeholder="e.g. sunken city, cozy village"
@@ -840,11 +847,12 @@ function ThemePanel({
         <label>
           Semantic mode <Info size={14} />
         </label>
-        <div className="segmented">
+        <div className="segmented" role="group" aria-label="Semantic mode">
           {(Object.keys(MODE_LABELS) as SemanticMode[]).map((mode) => (
             <button
               key={mode}
               className={filters.semanticMode === mode ? "active" : ""}
+              aria-pressed={filters.semanticMode === mode}
               onClick={() => updateFilter("semanticMode", mode)}
             >
               {MODE_LABELS[mode]}
@@ -876,11 +884,11 @@ function ThemePanel({
           })}
         </div>
       </div>
-      <button className="advanced" onClick={() => setAdvancedOpen((current) => !current)}>
+      <button className="advanced" aria-expanded={advancedOpen} aria-controls="advanced-semantic-options" onClick={() => setAdvancedOpen((current) => !current)}>
         Advanced semantic options
       </button>
       {advancedOpen && (
-        <div className="advanced-panel">
+        <div className="advanced-panel" id="advanced-semantic-options">
           <div className="field compact">
             <label>Theme expansion size</label>
             <input
@@ -888,6 +896,7 @@ function ThemePanel({
               min={100}
               max={1000}
               step={100}
+              aria-label="Theme expansion size"
               value={filters.semanticLimit}
               onChange={(event) => updateFilter("semanticLimit", Number(event.target.value))}
             />
@@ -899,6 +908,7 @@ function ThemePanel({
               type="range"
               min={1}
               max={5}
+              aria-label="Theme strength"
               value={filters.semanticWeight}
               onChange={(event) => updateFilter("semanticWeight", Number(event.target.value))}
             />
@@ -1342,23 +1352,23 @@ function DiagnosticsView({
               />
             </label>
             <div className="diagnostic-filter-group" aria-label="Diagnostics row filter">
-              <button className={rowFilter === "all" ? "active" : ""} onClick={() => setRowFilter("all")}>
+              <button className={rowFilter === "all" ? "active" : ""} aria-pressed={rowFilter === "all"} onClick={() => setRowFilter("all")}>
                 All rows
               </button>
-              <button className={rowFilter === "low-confidence" ? "active" : ""} onClick={() => setRowFilter("low-confidence")}>
+              <button className={rowFilter === "low-confidence" ? "active" : ""} aria-pressed={rowFilter === "low-confidence"} onClick={() => setRowFilter("low-confidence")}>
                 Low POS
               </button>
-              <button className={rowFilter === "semantic" ? "active" : ""} onClick={() => setRowFilter("semantic")}>
+              <button className={rowFilter === "semantic" ? "active" : ""} aria-pressed={rowFilter === "semantic"} onClick={() => setRowFilter("semantic")}>
                 Semantic
               </button>
-              <button className={rowFilter === "datamuse-only" ? "active" : ""} onClick={() => setRowFilter("datamuse-only")}>
+              <button className={rowFilter === "datamuse-only" ? "active" : ""} aria-pressed={rowFilter === "datamuse-only"} onClick={() => setRowFilter("datamuse-only")}>
                 Datamuse-only
               </button>
-              <button className={rowFilter === "fallback" ? "active" : ""} onClick={() => setRowFilter("fallback")}>
+              <button className={rowFilter === "fallback" ? "active" : ""} aria-pressed={rowFilter === "fallback"} onClick={() => setRowFilter("fallback")}>
                 Fallback
               </button>
             </div>
-            <span className="diagnostic-count">
+            <span className="diagnostic-count" aria-live="polite">
               {filteredEntries.length.toLocaleString()} of {generatedEntries.length.toLocaleString()} rows
             </span>
           </div>
@@ -1372,6 +1382,7 @@ function DiagnosticsView({
           ) : (
             <div className="diagnostic-table-wrap">
               <table className="diagnostic-table">
+                <caption className="sr-only">Generated word diagnostics</caption>
                 <thead>
                   <tr>
                     <th>Set</th>
@@ -1614,12 +1625,24 @@ function Modal({
   close: () => void;
   children: ReactNode;
 }) {
+  const titleId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") close();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [close]);
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={close}>
-      <section className="modal-panel" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby={titleId} onMouseDown={(event) => event.stopPropagation()}>
         <header>
-          <h2>{title}</h2>
-          <button onClick={close} aria-label="Close">
+          <h2 id={titleId}>{title}</h2>
+          <button ref={closeButtonRef} onClick={close} aria-label="Close">
             <X size={18} />
           </button>
         </header>
@@ -1642,13 +1665,14 @@ function NumberControl({
   max: number;
   onChange: (value: number) => void;
 }) {
+  const id = useId();
   return (
     <div className="field">
-      <label>{label}</label>
+      <label id={id}>{label}</label>
       <div className="number-control">
-        <input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
-        <button onClick={() => onChange(Math.max(min, value - 1))}>-</button>
-        <button onClick={() => onChange(Math.min(max, value + 1))}>+</button>
+        <input aria-labelledby={id} type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+        <button aria-label={`Decrease ${label}`} onClick={() => onChange(Math.max(min, value - 1))}>-</button>
+        <button aria-label={`Increase ${label}`} onClick={() => onChange(Math.min(max, value + 1))}>+</button>
       </div>
     </div>
   );
@@ -1665,10 +1689,11 @@ function TextFilter({
   placeholder: string;
   onChange: (value: string) => void;
 }) {
+  const id = useId();
   return (
     <div className="field compact">
-      <label>{label}</label>
-      <input value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <label htmlFor={id}>{label}</label>
+      <input id={id} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
@@ -1687,7 +1712,14 @@ function Toggle({
   return (
     <label className={variant === "inline" ? "toggle-row inline-toggle" : "toggle-row"}>
       <span>{label}</span>
-      <button className={checked ? "toggle on" : "toggle"} type="button" onClick={() => onChange(!checked)}>
+      <button
+        className={checked ? "toggle on" : "toggle"}
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+      >
         <span />
       </button>
     </label>

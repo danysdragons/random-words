@@ -5,8 +5,12 @@ import initSqlJs from "sql.js";
 test("loads the SQLite word database and generates sets", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Generator" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Filtered pool size")).toBeVisible();
   await expect(page.locator(".metric").filter({ hasText: "Quality mode" })).toContainText("Balanced");
+  await expect(page.getByRole("switch", { name: "Common / useful words" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Balanced" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Noun", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".metric").filter({ hasText: "Filtered pool size" })).toContainText(
     /\d{1,3}(,\d{3})*/,
   );
@@ -57,7 +61,9 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
 
   await page.getByRole("button", { name: "Help" }).click();
   await expect(page.getByRole("dialog", { name: "Help" })).toBeVisible();
-  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Help" })).toBeHidden();
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
@@ -69,6 +75,7 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByText("Quality mode controls how strongly")).toBeVisible();
 
   await page.getByRole("button", { name: "Diagnostics" }).click();
+  await expect(page.getByRole("button", { name: "Diagnostics" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
   await expect(page.locator(".metric-card").filter({ hasText: "Generated words" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "POS Basis" })).toBeVisible();
@@ -77,6 +84,7 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByText("No diagnostics rows match")).toBeVisible();
   await page.getByLabel("Filter diagnostics rows").fill("");
   await page.getByRole("button", { name: "Fallback" }).click();
+  await expect(page.getByRole("button", { name: "Fallback" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText(/of 12 rows/)).toBeVisible();
 });
 
@@ -87,8 +95,10 @@ test("applies POS filters and exposes acronym filtering", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Concrete objects" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Actions & motion" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sensory" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Broad theme" })).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Noun", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Noun", exact: true })).toHaveAttribute("aria-pressed", "false");
   await page.getByRole("button", { name: "Adjective", exact: true }).click();
   await page.getByRole("button", { name: "Generate" }).click();
 
@@ -102,7 +112,9 @@ test("can show word metadata details on generated tiles", async ({ page }) => {
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
 
   await page.getByRole("button", { name: "Settings" }).click();
-  await page.locator(".toggle-row").filter({ hasText: "Show word details" }).getByRole("button").click();
+  await expect(page.getByRole("switch", { name: "Show word details" })).toHaveAttribute("aria-checked", "false");
+  await page.getByRole("switch", { name: "Show word details" }).click();
+  await expect(page.getByRole("switch", { name: "Show word details" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "Close" }).click();
 
   await page.getByRole("button", { name: "Generate", exact: true }).click();
