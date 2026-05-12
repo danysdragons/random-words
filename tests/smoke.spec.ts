@@ -67,10 +67,6 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
-  await expect(page.getByLabel("UI theme")).toHaveValue("system");
-  await page.getByLabel("UI theme").selectOption("solar-dark");
-  await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "solar-dark");
-  await expect(page.getByText("Solar Dark is pinned for this browser.")).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
 
   await page.getByRole("button", { name: "Manual" }).click();
@@ -90,6 +86,21 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await page.getByRole("button", { name: "Fallback" }).click();
   await expect(page.getByRole("button", { name: "Fallback" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText(/of 12 rows/)).toBeVisible();
+});
+
+test("can select and persist a UI theme", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByLabel("UI theme")).toHaveValue("system");
+
+  await page.getByLabel("UI theme").selectOption("solar-dark");
+  await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "solar-dark");
+  await expect(page.getByText("Solar Dark is pinned for this browser.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "solar-dark");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByLabel("UI theme")).toHaveValue("solar-dark");
 });
 
 test("applies POS filters and exposes acronym filtering", async ({ page }) => {
