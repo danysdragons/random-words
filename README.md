@@ -2,6 +2,10 @@
 
 A static random English word and phrase set generator backed by a generated SQLite artifact.
 
+## Documentation
+
+- [User manual](docs/user-manual.md)
+
 ## Development
 
 ```bash
