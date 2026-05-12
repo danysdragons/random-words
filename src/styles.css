@@ -917,6 +917,103 @@ input[type="range"] {
   gap: 8px;
 }
 
+.diagnostics-panel {
+  max-width: 1260px;
+}
+
+.diagnostic-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.metric-card {
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px;
+  background: #fffdfa;
+  border: 1px solid #ddd8cf;
+  border-radius: 8px;
+}
+
+.metric-card span,
+.metric-card small {
+  color: #6d6a64;
+  font-size: 13px;
+}
+
+.metric-card strong {
+  color: #202322;
+  font-size: 24px;
+}
+
+.diagnostic-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.diagnostic-rules article {
+  padding: 16px;
+  background: #fbfaf7;
+  border: 1px solid #e2ddd4;
+  border-radius: 8px;
+}
+
+.diagnostic-rules p {
+  margin-top: 8px;
+  color: #5b574f;
+  font-size: 14px;
+}
+
+.diagnostic-table-wrap {
+  margin-top: 22px;
+  overflow: auto;
+  border: 1px solid #ddd8cf;
+  border-radius: 8px;
+  background: #fffdfa;
+}
+
+.diagnostic-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.diagnostic-table th,
+.diagnostic-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #ece6dc;
+  text-align: left;
+  vertical-align: top;
+}
+
+.diagnostic-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: #4c4a45;
+  background: #f7f5ef;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.diagnostic-table td strong,
+.diagnostic-table td span {
+  display: block;
+}
+
+.diagnostic-table td span {
+  margin-top: 3px;
+  color: #6d6a64;
+  font-size: 12px;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

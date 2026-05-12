@@ -425,6 +425,9 @@ function App() {
           <button className={view === "collections" ? "active" : ""} onClick={() => setView("collections")}>
             Collections
           </button>
+          <button className={view === "diagnostics" ? "active" : ""} onClick={() => setView("diagnostics")}>
+            Diagnostics
+          </button>
           <button className={view === "about" ? "active" : ""} onClick={() => setView("about")}>
             About Data
           </button>
@@ -608,6 +611,14 @@ function App() {
               renameCollection={renameCollection}
               removeCollection={removeCollection}
               savedSets={savedSets}
+            />
+          )}
+          {view === "diagnostics" && (
+            <DiagnosticsView
+              sets={sets}
+              filters={filters}
+              basePoolSize={basePool.length}
+              semanticStats={semanticStats}
             />
           )}
           {view === "about" && <AboutDataView wordDb={wordDb} />}
@@ -1166,6 +1177,151 @@ function CollectionsView({
         </div>
       )}
     </section>
+  );
+}
+
+function DiagnosticsView({
+  sets,
+  filters,
+  basePoolSize,
+  semanticStats,
+}: {
+  sets: GeneratedSet[];
+  filters: Filters;
+  basePoolSize: number;
+  semanticStats: {
+    total: number;
+    localMatches: number;
+    datamuseOnly: number;
+    generatedSemanticWords: number;
+  };
+}) {
+  const generatedEntries = sets.flatMap((set, setIndex) =>
+    set.words.map((entry, wordIndex) => ({ entry, setIndex, wordIndex })),
+  );
+  const lowConfidenceCount = generatedEntries.filter(({ entry }) => entry.posConfidence < 70).length;
+  const datamuseOnlyCount = generatedEntries.filter(({ entry }) => entry.source === "datamuse").length;
+  const semanticOutputCount = generatedEntries.filter(({ entry }) => entry.semanticScore).length;
+
+  return (
+    <section className="main-panel library-panel diagnostics-panel">
+      <div className="section-head">
+        <div>
+          <h1>Diagnostics</h1>
+          <p>Runtime explanation for the current generated output.</p>
+        </div>
+      </div>
+
+      <div className="diagnostic-summary">
+        <MetricCard label="Filtered pool" value={basePoolSize.toLocaleString()} detail={filters.includeRare ? "rare included" : "common only"} />
+        <MetricCard label="Generated words" value={generatedEntries.length.toLocaleString()} detail={`${sets.length} sets visible`} />
+        <MetricCard label="Semantic pool" value={semanticStats.total.toLocaleString()} detail={`${semanticStats.localMatches.toLocaleString()} local matches`} />
+        <MetricCard label="Themed output" value={semanticOutputCount.toLocaleString()} detail={`${semanticStats.datamuseOnly.toLocaleString()} Datamuse-only candidates`} />
+        <MetricCard label="Low POS confidence" value={lowConfidenceCount.toLocaleString()} detail="< 70% confidence" />
+        <MetricCard label="Datamuse-only output" value={datamuseOnlyCount.toLocaleString()} detail="not in local SQLite" />
+      </div>
+
+      <div className="diagnostic-rules">
+        <article>
+          <h2>Active generation rules</h2>
+          <p>
+            {filters.theme.trim() ? `Theme "${filters.theme.trim()}" · ${MODE_LABELS[filters.semanticMode]}` : "No theme"}
+            {" · "}
+            {QUALITY_LABELS[filters.qualityMode]}
+            {" · "}
+            {filters.useSeededGeneration ? `Seed ${filters.seed}` : "Fresh seed each click"}
+          </p>
+          <p>
+            Length {filters.minLength}-{filters.maxLength} · POS{" "}
+            {filters.selectedPos.length ? filters.selectedPos.map(posLabel).join(", ") : "any"} ·{" "}
+            {DIALECT_LABELS[filters.dialect]}
+          </p>
+        </article>
+        <article>
+          <h2>Quality gates</h2>
+          <p>
+            {[
+              filters.excludeOffensive && "offensive words excluded",
+              filters.noProperNouns && "proper nouns excluded",
+              filters.noAcronyms && "acronyms excluded",
+              filters.noContractions && "contractions excluded",
+              filters.noHyphenated && "hyphenated words excluded",
+              filters.uniqueWords && "unique roots preferred",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </article>
+      </div>
+
+      {generatedEntries.length === 0 ? (
+        <div className="empty-state">
+          <Info size={24} />
+          <h2>No generated words to inspect</h2>
+          <p>Generate a set, then return here to inspect word metadata and filter behavior.</p>
+        </div>
+      ) : (
+        <div className="diagnostic-table-wrap">
+          <table className="diagnostic-table">
+            <thead>
+              <tr>
+                <th>Set</th>
+                <th>Word</th>
+                <th>POS</th>
+                <th>POS Basis</th>
+                <th>Quality</th>
+                <th>Semantic</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {generatedEntries.map(({ entry, setIndex, wordIndex }) => (
+                <tr key={`${setIndex}-${wordIndex}-${entry.word}`}>
+                  <td>{setIndex + 1}.{wordIndex + 1}</td>
+                  <td>
+                    <strong>{entry.word}</strong>
+                    {entry.baseForm !== entry.word && <span>base {entry.baseForm}</span>}
+                  </td>
+                  <td>
+                    <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
+                    {(entry.alternatePos?.length ?? 0) > 0 && <span>also {entry.alternatePos.map(posShort).join("/")}</span>}
+                  </td>
+                  <td>
+                    <strong>{posSourceLabel(entry.posSource)}</strong>
+                    <span>{entry.posConfidence}% confidence</span>
+                  </td>
+                  <td>
+                    <strong>{entry.qualityScore}</strong>
+                    <span>{entry.frequencyBand}</span>
+                  </td>
+                  <td>
+                    {entry.semanticScore ? (
+                      <>
+                        <strong>{semanticStrengthLabel(entry.semanticScore)}</strong>
+                        <span>{entry.semanticSource === "local" ? "local metadata" : "Datamuse metadata"}</span>
+                      </>
+                    ) : (
+                      <span>general fallback</span>
+                    )}
+                  </td>
+                  <td>{entry.source === "scowl" ? "SQLite" : "Datamuse"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <article className="metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
   );
 }
 

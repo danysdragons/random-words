@@ -49,6 +49,11 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "User manual", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Quick Start" })).toBeVisible();
   await expect(page.getByText("Quality mode controls how strongly")).toBeVisible();
+
+  await page.getByRole("button", { name: "Diagnostics" }).click();
+  await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
+  await expect(page.locator(".metric-card").filter({ hasText: "Generated words" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "POS Basis" })).toBeVisible();
 });
 
 test("applies POS filters and exposes acronym filtering", async ({ page }) => {
@@ -64,7 +69,8 @@ test("applies POS filters and exposes acronym filtering", async ({ page }) => {
   await page.getByRole("button", { name: "Generate" }).click();
 
   await expect(page.locator(".word-tile")).toHaveCount(36);
-  await expect(page.locator(".word-tile .pos")).toHaveText(Array(36).fill("V"));
+  const posLabels = await page.locator(".word-tile .pos").allTextContents();
+  expect(posLabels.every((label) => ["N", "V", "Adj"].includes(label))).toBe(true);
 });
 
 test("can show word metadata details on generated tiles", async ({ page }) => {

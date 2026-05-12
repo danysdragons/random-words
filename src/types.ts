@@ -94,7 +94,7 @@ export interface Collection {
 
 export type ExportFormat = "json" | "csv" | "txt";
 
-export type AppView = "generator" | "saved" | "collections" | "about" | "manual";
+export type AppView = "generator" | "saved" | "collections" | "diagnostics" | "about" | "manual";
 
 export interface BuildMeta {
   source: string;
