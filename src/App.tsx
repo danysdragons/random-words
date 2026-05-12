@@ -84,6 +84,7 @@ const DEFAULT_FILTERS: Filters = {
   semanticLimit: 600,
   semanticWeight: 2,
   fallbackToGeneral: true,
+  useSeededGeneration: false,
   seed: "728391",
 };
 
@@ -146,8 +147,12 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  async function handleGenerate(nextFilters = filters) {
+  async function handleGenerate(requestedFilters = filters) {
     if (!wordDb) return;
+    const nextFilters = prepareGenerationFilters(requestedFilters);
+    if (nextFilters.seed !== filters.seed || nextFilters.useSeededGeneration !== filters.useSeededGeneration) {
+      setFilters(nextFilters);
+    }
     setIsGenerating(true);
     setStatus("");
     try {
@@ -182,7 +187,9 @@ function App() {
     const nextFilters = {
       ...filters,
       setCount: 1,
-      seed: `${filters.seed}-${targetIndex + 1}-${Date.now()}`,
+      seed: filters.useSeededGeneration
+        ? `${filters.seed}-${targetIndex + 1}`
+        : createRandomSeed(),
     };
     setIsGenerating(true);
     try {
@@ -204,13 +211,13 @@ function App() {
   }
 
   function randomizeSeed() {
-    updateFilter("seed", String(Math.floor(100000 + Math.random() * 900000)));
+    updateFilter("seed", createRandomSeed());
   }
 
   function handleShuffle() {
     const nextFilters = {
       ...filters,
-      seed: String(Number(filters.seed) + 1 || Math.floor(100000 + Math.random() * 900000)),
+      seed: createRandomSeed(),
     };
     setFilters(nextFilters);
     void handleGenerate(nextFilters);
@@ -365,19 +372,31 @@ function App() {
               </label>
             </div>
 
+            <Toggle
+              label="Reproducible seed mode"
+              checked={filters.useSeededGeneration}
+              onChange={(checked) => updateFilter("useSeededGeneration", checked)}
+              variant="inline"
+            />
+
             <div className="status-row">
-              <label>
-                <span>Seed</span>
-                <input value={filters.seed} onChange={(event) => updateFilter("seed", event.target.value)} />
-                <button className="icon" onClick={randomizeSeed} aria-label="Randomize seed">
-                  <RotateCcw size={15} />
-                </button>
-              </label>
+              {filters.useSeededGeneration && (
+                <label>
+                  <span>Seed</span>
+                  <input value={filters.seed} onChange={(event) => updateFilter("seed", event.target.value)} />
+                  <button className="icon" onClick={randomizeSeed} aria-label="Generate seed">
+                    <RotateCcw size={15} />
+                  </button>
+                </label>
+              )}
               <div className="metric">
                 Filtered pool size <strong>{basePool.length.toLocaleString()}</strong>
               </div>
               <div className="metric">
                 Commonness <strong>{filters.includeRare ? "Expanded" : "Balanced"}</strong>
+              </div>
+              <div className="metric">
+                Randomness <strong>{filters.useSeededGeneration ? "Seeded" : "Fresh each click"}</strong>
               </div>
               {semanticPool.length > 0 && (
                 <div className="metric">
@@ -986,13 +1005,15 @@ function Toggle({
   label,
   checked,
   onChange,
+  variant = "default",
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  variant?: "default" | "inline";
 }) {
   return (
-    <label className="toggle-row">
+    <label className={variant === "inline" ? "toggle-row inline-toggle" : "toggle-row"}>
       <span>{label}</span>
       <button className={checked ? "toggle on" : "toggle"} type="button" onClick={() => onChange(!checked)}>
         <span />
@@ -1046,6 +1067,18 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat) {
   return sets
     .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => entry.word).join(", ")}`)
     .join("\n\n");
+}
+
+function prepareGenerationFilters(filters: Filters): Filters {
+  if (filters.useSeededGeneration) return filters;
+  return {
+    ...filters,
+    seed: createRandomSeed(),
+  };
+}
+
+function createRandomSeed() {
+  return String(Math.floor(100000000 + Math.random() * 900000000));
 }
 
 function exportMime(format: ExportFormat) {

@@ -36,6 +36,7 @@ export interface Filters {
   semanticLimit: number;
   semanticWeight: number;
   fallbackToGeneral: boolean;
+  useSeededGeneration: boolean;
   seed: string;
 }
 

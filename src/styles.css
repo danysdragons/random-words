@@ -258,6 +258,20 @@ input[type="range"] {
   font-weight: 600;
 }
 
+.inline-toggle {
+  width: fit-content;
+  margin-top: 16px;
+  padding: 9px 12px;
+  background: #fbfaf7;
+  border: 1px solid #d9d5ce;
+  border-radius: 7px;
+}
+
+.inline-toggle span {
+  color: #4c4a45;
+  font-size: 14px;
+}
+
 .toggle {
   width: 42px;
   height: 24px;
