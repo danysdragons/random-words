@@ -9,7 +9,7 @@ interface DatamuseWord {
   defHeadword?: string;
 }
 
-const CACHE_KEY = "random-words:datamuse-cache:v3";
+const CACHE_KEY = "random-words:datamuse-cache:v4";
 const DEFINITION_CACHE_KEY = "random-words:definition-cache:v2";
 const MAX_CACHE_ITEMS = 80;
 const MAX_DEFINITION_CACHE_ITEMS = 600;
@@ -194,6 +194,8 @@ function toEntry(item: DatamuseWord, index: number): WordEntry | null {
     source: "datamuse",
     score: item.score ?? 0,
     qualityScore: datamuseQuality(item.score ?? 0),
+    semanticScore: item.score ?? 0,
+    semanticSource: "datamuse",
     frequencyBand: "semantic",
     isPhrase: word.includes(" "),
   };

@@ -51,7 +51,7 @@ function selectPool(basePool: WordEntry[], semanticPool: WordEntry[], filters: F
   if (!filters.theme.trim()) return basePool;
   const semanticCopies = Math.max(1, filters.semanticWeight);
   const weightedSemantic = Array.from({ length: semanticCopies }, () => semanticPool).flat();
-  const fallback = filters.fallbackToGeneral ? basePool : [];
+  const fallback = filters.fallbackToGeneral ? limitThemedFallback(basePool, semanticPool, filters) : [];
   if (filters.semanticMode === "strict") return semanticPool.length ? semanticPool : fallback;
   if (filters.semanticMode === "related") return [...weightedSemantic, ...weightedSemantic, ...fallback];
   if (filters.semanticMode === "mood" || filters.semanticMode === "evocative") return [...weightedSemantic, ...fallback];
@@ -61,10 +61,36 @@ function selectPool(basePool: WordEntry[], semanticPool: WordEntry[], filters: F
   return [...weightedSemantic, ...fallback, ...fallback];
 }
 
+function limitThemedFallback(basePool: WordEntry[], semanticPool: WordEntry[], filters: Filters) {
+  if (!semanticPool.length) return basePool;
+  const requestedWords = filters.wordsPerSet * filters.setCount;
+  const fallbackLimit = Math.max(requestedWords * 2, semanticPool.length * 8);
+  return basePool.slice(0, fallbackLimit);
+}
+
 function mergeSemantic(basePool: WordEntry[], semanticPool: WordEntry[]) {
   if (!semanticPool.length) return [];
   const baseByWord = new Map(basePool.map((entry) => [entry.word, entry]));
-  return semanticPool.map((entry) => baseByWord.get(entry.word) ?? entry);
+  return semanticPool.map((entry) => {
+    const localEntry = baseByWord.get(entry.word);
+    const semanticScore = entry.semanticScore ?? entry.score;
+    if (!localEntry) {
+      return {
+        ...entry,
+        semanticScore,
+        semanticSource: "datamuse" as const,
+      };
+    }
+    return {
+      ...localEntry,
+      qualityScore: Math.max(
+        localEntry.qualityScore,
+        Math.round(localEntry.qualityScore * 0.7 + entry.qualityScore * 0.3),
+      ),
+      semanticScore,
+      semanticSource: "local" as const,
+    };
+  });
 }
 
 function clientSafe(entry: WordEntry, filters: Filters) {
@@ -105,13 +131,17 @@ function weightedShuffle(items: WordEntry[], random: () => number, filters: Filt
 
 function qualityWeight(item: WordEntry, filters: Filters) {
   const rawWeight = Math.max(1, item.qualityScore || item.score || 1);
+  const semanticBoost =
+    filters.theme.trim() && item.semanticScore
+      ? 1 + Math.min(0.75, Math.log10(item.semanticScore + 1) / 10)
+      : 1;
   if (filters.qualityMode === "common") {
-    return filters.includeRare ? rawWeight * 1.35 : rawWeight * rawWeight;
+    return (filters.includeRare ? rawWeight * 1.35 : rawWeight * rawWeight) * semanticBoost;
   }
   if (filters.qualityMode === "surprising") {
-    return filters.includeRare ? Math.max(1, Math.sqrt(rawWeight)) : Math.max(1, rawWeight ** 0.7);
+    return (filters.includeRare ? Math.max(1, Math.sqrt(rawWeight)) : Math.max(1, rawWeight ** 0.7)) * semanticBoost;
   }
-  return filters.includeRare ? Math.sqrt(rawWeight) * 10 : rawWeight;
+  return (filters.includeRare ? Math.sqrt(rawWeight) * 10 : rawWeight) * semanticBoost;
 }
 
 function familyKey(word: string) {

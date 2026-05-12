@@ -81,6 +81,33 @@ test("can show word metadata details on generated tiles", async ({ page }) => {
   await expect(page.locator(".word-details").first()).toContainText(/Curated|Morphology|Suffix|Default|Datamuse/);
 });
 
+test("shows semantic pool provenance for themed generation", async ({ page }) => {
+  await page.route("https://api.datamuse.com/words?**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("md") === "d") {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    await route.fulfill({
+      json: [
+        { word: "ocean", score: 60000, tags: ["n"] },
+        { word: "reef", score: 42000, tags: ["n"] },
+        { word: "pelagic", score: 12000, tags: ["adj"] },
+      ],
+    });
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByPlaceholder("e.g. sunken city, cozy village").fill("ocean");
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+
+  await expect(page.locator(".metric").filter({ hasText: "Semantic matches" })).toContainText("3");
+  await expect(page.locator(".metric").filter({ hasText: "Local semantic data" })).toContainText(/local/);
+  await expect(page.locator(".metric").filter({ hasText: "Themed output" })).toBeVisible();
+});
+
 test("uses alternate POS entries when filtering generated words", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });

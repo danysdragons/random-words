@@ -358,6 +358,7 @@ function App() {
     localStorage.removeItem("random-words:datamuse-cache:v1");
     localStorage.removeItem("random-words:datamuse-cache:v2");
     localStorage.removeItem("random-words:datamuse-cache:v3");
+    localStorage.removeItem("random-words:datamuse-cache:v4");
     localStorage.removeItem("random-words:definition-cache:v1");
     localStorage.removeItem("random-words:definition-cache:v2");
     setDefinitions({});
@@ -383,6 +384,18 @@ function App() {
     () => sets.reduce((total, set) => total + set.words.length, 0),
     [sets],
   );
+
+  const semanticStats = useMemo(() => {
+    const baseWords = new Set(basePool.map((entry) => entry.word));
+    const localMatches = semanticPool.filter((entry) => baseWords.has(entry.word)).length;
+    const generatedSemanticWords = sets.flatMap((set) => set.words).filter((entry) => entry.semanticScore).length;
+    return {
+      total: semanticPool.length,
+      localMatches,
+      datamuseOnly: Math.max(0, semanticPool.length - localMatches),
+      generatedSemanticWords,
+    };
+  }, [basePool, semanticPool, sets]);
 
   const collectionCounts = useMemo(() => {
     const counts = new Map<string | null, number>();
@@ -506,9 +519,23 @@ function App() {
               <div className="metric">
                 Randomness <strong>{filters.useSeededGeneration ? "Seeded" : "Fresh each click"}</strong>
               </div>
-              {semanticPool.length > 0 && (
+              {semanticStats.total > 0 && (
                 <div className="metric">
-                  Semantic matches <strong>{semanticPool.length.toLocaleString()}</strong>
+                  Semantic matches <strong>{semanticStats.total.toLocaleString()}</strong>
+                </div>
+              )}
+              {semanticStats.total > 0 && (
+                <div className="metric">
+                  Local semantic data{" "}
+                  <strong>
+                    {semanticStats.localMatches.toLocaleString()} local ·{" "}
+                    {semanticStats.datamuseOnly.toLocaleString()} Datamuse-only
+                  </strong>
+                </div>
+              )}
+              {semanticStats.generatedSemanticWords > 0 && (
+                <div className="metric">
+                  Themed output <strong>{semanticStats.generatedSemanticWords.toLocaleString()} words</strong>
                 </div>
               )}
             </div>
@@ -907,6 +934,7 @@ function WordSetCard({
               <span className="word-details">
                 {entry.baseForm !== entry.word && `base ${entry.baseForm} · `}
                 {(entry.alternatePos?.length ?? 0) > 0 && `also ${entry.alternatePos.map(posShort).join("/")} · `}
+                {entry.semanticScore && `semantic ${semanticStrengthLabel(entry.semanticScore)} · `}
                 {posSourceLabel(entry.posSource)} · {entry.posConfidence}%
               </span>
             )}
@@ -918,6 +946,7 @@ function WordSetCard({
                   <span className="tooltip-meta">
                     {entry.baseForm !== entry.word ? `Base ${entry.baseForm} · ` : ""}
                     {(entry.alternatePos?.length ?? 0) > 0 ? `Also ${entry.alternatePos.map(posShort).join("/")} · ` : ""}
+                    {entry.semanticScore ? `Semantic ${semanticStrengthLabel(entry.semanticScore)} · ` : ""}
                     POS {posSourceLabel(entry.posSource).toLowerCase()} · {entry.posConfidence}% confidence
                   </span>
                 )}
@@ -1426,6 +1455,13 @@ function posSourceLabel(source: WordEntry["posSource"]) {
   }[source];
 }
 
+function semanticStrengthLabel(score: number) {
+  if (score >= 50000) return "very strong";
+  if (score >= 10000) return "strong";
+  if (score >= 2000) return "moderate";
+  return "light";
+}
+
 function normalizeTheme(value: string) {
   return value.trim().toLowerCase().replaceAll("&", "and").replace(/\s+/g, " ");
 }
@@ -1446,7 +1482,7 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
   if (format === "json") return JSON.stringify({ exportedAt, criteria, sets }, null, 2);
   if (format === "csv") {
     return [
-      "exported_at,set,position,word,part_of_speech,alternate_pos,frequency_band,quality_score,source,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
+      "exported_at,set,position,word,part_of_speech,alternate_pos,frequency_band,quality_score,source,semantic_score,semantic_source,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
       ...sets.flatMap((set, setIndex) =>
         set.words.map((entry, wordIndex) =>
           [
@@ -1459,6 +1495,8 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
             entry.frequencyBand,
             entry.qualityScore,
             entry.source,
+            entry.semanticScore ?? "",
+            entry.semanticSource ?? "",
             set.theme,
             criteria.theme,
             criteria.semanticMode,

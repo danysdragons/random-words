@@ -65,6 +65,8 @@ export interface WordEntry {
   source: "scowl" | "datamuse";
   score: number;
   qualityScore: number;
+  semanticScore?: number;
+  semanticSource?: "local" | "datamuse";
   frequencyBand: string;
   isPhrase: boolean;
 }
