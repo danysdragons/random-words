@@ -100,13 +100,51 @@ function cleanRawWord(word) {
   return word.trim().replaceAll("’", "'").normalize("NFKC");
 }
 
-function inferPos(word) {
+function inferPos(word, knownWords = new Map()) {
   const override = POS_OVERRIDES.get(word);
   if (override) return override;
+  if (isInflectedVerb(word, knownWords)) return "verb";
   for (const pattern of POS_PATTERNS) {
     if (pattern.re.test(word)) return pattern.pos;
   }
   return "noun";
+}
+
+function isInflectedVerb(word, knownWords) {
+  if (!/^[a-z]+$/.test(word) || word.length < 4) return false;
+  return verbBaseCandidates(word).some((base) => isPlausibleVerbBase(word, base, knownWords));
+}
+
+function verbBaseCandidates(word) {
+  const candidates = new Set();
+  if (word.endsWith("ied") && word.length > 4) {
+    candidates.add(`${word.slice(0, -3)}y`);
+  }
+  if (word.endsWith("ed") && word.length > 3) {
+    const stem = word.slice(0, -2);
+    candidates.add(stem);
+    candidates.add(`${stem}e`);
+    if (hasDoubledFinalConsonant(stem)) candidates.add(stem.slice(0, -1));
+  }
+  if (word.endsWith("ing") && word.length > 5) {
+    const stem = word.slice(0, -3);
+    candidates.add(stem);
+    candidates.add(`${stem}e`);
+    if (hasDoubledFinalConsonant(stem)) candidates.add(stem.slice(0, -1));
+  }
+  return [...candidates];
+}
+
+function hasDoubledFinalConsonant(word) {
+  if (word.length < 2) return false;
+  const last = word.at(-1);
+  return last === word.at(-2) && /[bcdfghjklmnpqrstvwxz]/.test(last);
+}
+
+function isPlausibleVerbBase(word, base, knownWords) {
+  if (!base || base === word || base.length < 2) return false;
+  if (POS_OVERRIDES.get(base) === "verb") return true;
+  return knownWords.has(base);
 }
 
 function frequencyBand(word) {
@@ -177,7 +215,7 @@ function applyWord(recordMap, rawWord, pkg) {
       hasApostrophe: word.includes("'"),
       hasHyphen: word.includes("-"),
       isPhrase: /\s/.test(word),
-      pos: inferPos(word),
+      pos: "unknown",
       common: false,
       acronymHint: acronymHint(rawWord, word),
       dialects: new Set(),
@@ -299,6 +337,9 @@ async function main() {
     const words = readPackageWords(pkg);
     sourceCount += words.length;
     for (const word of words) applyWord(records, word, pkg);
+  }
+  for (const record of records.values()) {
+    record.pos = inferPos(record.word, records);
   }
 
   const sortedRecords = [...records.values()].sort((a, b) => a.word.localeCompare(b.word));

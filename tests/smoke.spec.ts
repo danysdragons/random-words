@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import initSqlJs from "sql.js";
 
 test("loads the SQLite word database and generates sets", async ({ page }) => {
   await page.goto("/");
@@ -63,6 +65,30 @@ test("applies POS filters and exposes acronym filtering", async ({ page }) => {
 
   await expect(page.locator(".word-tile")).toHaveCount(36);
   await expect(page.locator(".word-tile .pos")).toHaveText(Array(36).fill("V"));
+});
+
+test("classifies common inflected verb forms as verbs", async () => {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(readFileSync("public/data/words.sqlite"));
+  const verbForms = [
+    "hugged",
+    "hugging",
+    "played",
+    "playing",
+    "walked",
+    "walking",
+    "moved",
+    "moving",
+    "created",
+    "creating",
+  ];
+
+  for (const word of verbForms) {
+    const result = db.exec("SELECT pos FROM words WHERE word = ?", [word]);
+    expect(result[0]?.values[0]?.[0], `${word} POS`).toBe("verb");
+  }
+
+  db.close();
 });
 
 test("round-trips criteria through a share URL", async ({ page }) => {
