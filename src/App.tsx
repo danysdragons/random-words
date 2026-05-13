@@ -164,6 +164,19 @@ interface HistoryEntry {
   createdAt: string;
 }
 
+type DiagnosticRowFilter = "all" | "low-confidence" | "semantic" | "datamuse-only" | "fallback";
+
+interface DiagnosticRow {
+  entry: WordEntry;
+  setIndex: number;
+  wordIndex: number;
+}
+
+interface DiagnosticExportContext {
+  rowFilter: DiagnosticRowFilter;
+  query: string;
+}
+
 function App() {
   const [view, setView] = usePersistentState<AppView>("random-words:view:v1", "generator");
   const [wordDb, setWordDb] = useState<WordDatabase | null>(null);
@@ -331,7 +344,7 @@ function App() {
     const blob = new Blob([serializeSets(sets, format, filters)], {
       type: exportMime(format),
     });
-    downloadBlob(blob, `random-word-sets.${format}`);
+    downloadBlob(blob, exportFileName("random-word-sets", format, filters));
   }
 
   function exportSavedWorkspace() {
@@ -558,7 +571,7 @@ function App() {
                   <option value="csv">CSV</option>
                   <option value="txt">Text</option>
                 </select>
-                <button onClick={() => exportCurrentSets()}>
+                <button onClick={() => exportCurrentSets()} disabled={sets.length === 0}>
                   <Download size={18} />
                   Export
                 </button>
@@ -693,6 +706,12 @@ function App() {
               filters={filters}
               basePoolSize={basePool.length}
               semanticStats={semanticStats}
+              exportDiagnostics={(rows, format, context) => {
+                const blob = new Blob([serializeDiagnostics(rows, format, filters, semanticStats, context)], {
+                  type: exportMime(format),
+                });
+                downloadBlob(blob, exportFileName("random-words-diagnostics", format, filters));
+              }}
             />
           )}
           {view === "about" && <AboutDataView wordDb={wordDb} />}
@@ -1293,6 +1312,7 @@ function DiagnosticsView({
   filters,
   basePoolSize,
   semanticStats,
+  exportDiagnostics,
 }: {
   sets: GeneratedSet[];
   filters: Filters;
@@ -1303,9 +1323,11 @@ function DiagnosticsView({
     datamuseOnly: number;
     generatedSemanticWords: number;
   };
+  exportDiagnostics: (rows: DiagnosticRow[], format: ExportFormat, context: DiagnosticExportContext) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [rowFilter, setRowFilter] = useState<"all" | "low-confidence" | "semantic" | "datamuse-only" | "fallback">("all");
+  const [rowFilter, setRowFilter] = useState<DiagnosticRowFilter>("all");
+  const [diagnosticExportFormat, setDiagnosticExportFormat] = useState<ExportFormat>("csv");
   const generatedEntries = sets.flatMap((set, setIndex) =>
     set.words.map((entry, wordIndex) => ({ entry, setIndex, wordIndex })),
   );
@@ -1422,6 +1444,24 @@ function DiagnosticsView({
             <span className="diagnostic-count" aria-live="polite">
               {filteredEntries.length.toLocaleString()} of {generatedEntries.length.toLocaleString()} rows
             </span>
+            <label className="export-control diagnostic-export">
+              <select
+                value={diagnosticExportFormat}
+                onChange={(event) => setDiagnosticExportFormat(event.target.value as ExportFormat)}
+                aria-label="Diagnostics export format"
+              >
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+                <option value="txt">Text</option>
+              </select>
+              <button
+                onClick={() => exportDiagnostics(filteredEntries, diagnosticExportFormat, { rowFilter, query })}
+                disabled={filteredEntries.length === 0}
+              >
+                <Download size={18} />
+                Export diagnostics
+              </button>
+            </label>
           </div>
 
           {filteredEntries.length === 0 ? (
@@ -1875,7 +1915,7 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
             criteria.useSeededGeneration ? "seeded" : "fresh",
             criteria.seed,
           ]
-            .map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`)
+            .map(csvEscape)
             .join(","),
         ),
       ),
@@ -1895,6 +1935,122 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
   return `${criteriaLines}\n\n${sets
     .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => entry.word).join(", ")}`)
     .join("\n\n")}`;
+}
+
+function serializeDiagnostics(
+  rows: DiagnosticRow[],
+  format: ExportFormat,
+  filters: Filters,
+  semanticStats: {
+    total: number;
+    localMatches: number;
+    datamuseOnly: number;
+    generatedSemanticWords: number;
+  },
+  context: DiagnosticExportContext,
+) {
+  const exportedAt = new Date().toISOString();
+  const criteria = exportCriteria(filters);
+  const diagnostics = rows.map(({ entry, setIndex, wordIndex }) => diagnosticRowToRecord(entry, setIndex, wordIndex));
+
+  if (format === "json") {
+    return JSON.stringify(
+      {
+        exportedAt,
+        criteria,
+        diagnosticsContext: {
+          rowFilter: context.rowFilter,
+          query: context.query.trim(),
+          rowCount: rows.length,
+        },
+        semanticStats,
+        rows: diagnostics,
+      },
+      null,
+      2,
+    );
+  }
+
+  if (format === "csv") {
+    return [
+      "exported_at,row_filter,query,set,position,word,base_form,part_of_speech,alternate_pos,pos_source,pos_confidence,frequency_band,quality_score,source,semantic_score,semantic_strength,semantic_source",
+      ...diagnostics.map((row) =>
+        [
+          exportedAt,
+          context.rowFilter,
+          context.query.trim(),
+          row.set,
+          row.position,
+          row.word,
+          row.baseForm,
+          row.partOfSpeech,
+          row.alternatePos.join("|"),
+          row.posSource,
+          row.posConfidence,
+          row.frequencyBand,
+          row.qualityScore,
+          row.source,
+          row.semanticScore ?? "",
+          row.semanticStrength,
+          row.semanticSource ?? "",
+        ]
+          .map(csvEscape)
+          .join(","),
+      ),
+    ].join("\n");
+  }
+
+  const header = [
+    `Exported: ${exportedAt}`,
+    `Rows: ${rows.length}`,
+    `Filter: ${context.rowFilter}`,
+    `Search: ${context.query.trim() || "none"}`,
+    `Theme: ${criteria.theme || "random"}`,
+    `Semantic mode: ${criteria.semanticMode}`,
+    `Quality mode: ${QUALITY_LABELS[criteria.qualityMode]}`,
+    `Semantic pool: ${semanticStats.total} candidates, ${semanticStats.localMatches} local matches, ${semanticStats.datamuseOnly} Datamuse-only`,
+  ].join("\n");
+
+  return `${header}\n\n${diagnostics
+    .map(
+      (row) =>
+        `${row.set}.${row.position} ${row.word} [${posShort(row.partOfSpeech)}] ` +
+        `${row.posSource}, ${row.posConfidence}% confidence, ${row.frequencyBand}, quality ${row.qualityScore}, ` +
+        `${row.semanticStrength || "general fallback"}, ${row.source}`,
+    )
+    .join("\n")}`;
+}
+
+function diagnosticRowToRecord(entry: WordEntry, setIndex: number, wordIndex: number) {
+  return {
+    set: setIndex + 1,
+    position: wordIndex + 1,
+    word: entry.word,
+    baseForm: entry.baseForm,
+    partOfSpeech: entry.pos,
+    alternatePos: entry.alternatePos,
+    posSource: entry.posSource,
+    posConfidence: entry.posConfidence,
+    frequencyBand: entry.frequencyBand,
+    qualityScore: entry.qualityScore,
+    source: entry.source === "scowl" ? "SQLite" : "Datamuse",
+    semanticScore: entry.semanticScore,
+    semanticStrength: entry.semanticScore ? semanticStrengthLabel(entry.semanticScore) : "general fallback",
+    semanticSource: entry.semanticSource,
+  };
+}
+
+function csvEscape(value: unknown) {
+  return `"${String(value).replaceAll("\"", "\"\"")}"`;
+}
+
+function exportFileName(baseName: string, format: ExportFormat, filters: Filters) {
+  const theme = filters.theme.trim() ? `-${slugify(filters.theme)}` : "";
+  return `${baseName}${theme}-${new Date().toISOString().slice(0, 10)}.${format}`;
+}
+
+function slugify(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
 }
 
 function serializeSavedWorkspace(savedSets: SavedSet[], collections: Collection[]) {

@@ -11,6 +11,7 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByRole("switch", { name: "Common / useful words" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("button", { name: "Balanced" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Noun", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Export", exact: true })).toBeDisabled();
   await expect(page.locator(".metric").filter({ hasText: "Filtered pool size" })).toContainText(
     /\d{1,3}(,\d{3})*/,
   );
@@ -23,6 +24,11 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await page.getByRole("button", { name: "Generate" }).click();
   await expect(page.getByRole("heading", { name: "Set 1" })).toBeVisible();
   await expect(page.locator(".word-tile")).toHaveCount(36);
+
+  const setsDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const setsDownload = await setsDownloadPromise;
+  expect(setsDownload.suggestedFilename()).toMatch(/^random-word-sets-\d{4}-\d{2}-\d{2}\.json$/);
 
   await page.getByRole("button", { name: "Save", exact: true }).first().click();
   await expect(page.getByText("Saved Random Set 1")).toBeVisible();
@@ -75,11 +81,20 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByText("Quality mode controls how strongly")).toBeVisible();
 
   await page.getByRole("button", { name: "Diagnostics" }).click();
-  await expect(page.getByRole("button", { name: "Diagnostics" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: "Diagnostics", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Diagnostics" })).toBeVisible();
   await expect(page.locator(".metric-card").filter({ hasText: "Generated words" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "POS Basis" })).toBeVisible();
   await expect(page.getByText("12 of 12 rows")).toBeVisible();
+  const diagnosticsDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export diagnostics" }).click();
+  const diagnosticsDownload = await diagnosticsDownloadPromise;
+  expect(diagnosticsDownload.suggestedFilename()).toMatch(/^random-words-diagnostics-\d{4}-\d{2}-\d{2}\.csv$/);
+  const diagnosticsPath = "test-results/random-words-diagnostics.csv";
+  await diagnosticsDownload.saveAs(diagnosticsPath);
+  const diagnosticsCsv = readFileSync(diagnosticsPath, "utf8");
+  expect(diagnosticsCsv).toContain("exported_at,row_filter,query,set,position,word");
+  expect(diagnosticsCsv).toContain('"all"');
   await page.getByLabel("Filter diagnostics rows").fill("zzzzunlikely");
   await expect(page.getByText("No diagnostics rows match")).toBeVisible();
   await page.getByLabel("Filter diagnostics rows").fill("");

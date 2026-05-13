@@ -283,6 +283,8 @@ If a shared link is incomplete or malformed, the app leaves the existing/default
 
 Choose an export format and click **Export**.
 
+The export button is enabled after at least one word set has been generated. Downloaded result filenames include the export date and, when a theme is active, a short theme slug.
+
 Supported formats:
 
 - **JSON**
@@ -312,6 +314,14 @@ Rows include metadata such as set number, word position, part of speech, frequen
 Text export is best for notes, documents, prompts, and quick sharing.
 
 It includes a short criteria summary followed by each generated set.
+
+## Diagnostics
+
+The **Diagnostics** view explains the currently generated output. It shows summary counts, active generation rules, quality gates, and row-level metadata for each generated word.
+
+Use the diagnostics search box and row filter buttons to narrow the visible rows.
+
+Click **Export diagnostics** to download the currently visible diagnostics rows. Diagnostics export supports JSON, CSV, and text formats. The export includes the active diagnostics row filter, search query, criteria metadata, semantic summary counts, and row-level word metadata such as POS source, confidence, frequency band, quality score, source, and semantic strength.
 
 ## Saved Sets
 

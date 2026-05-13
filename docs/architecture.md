@@ -528,7 +528,7 @@ This makes older links safer to handle. Invalid or undecodable payloads are reje
 
 ## Export Flow
 
-Exporting converts the visible sets plus active criteria into one of three formats.
+Exporting converts the visible sets plus active criteria into one of three formats. Result exports use `serializeSets`; diagnostics exports use `serializeDiagnostics`.
 
 ```mermaid
 flowchart LR
@@ -552,7 +552,7 @@ flowchart LR
   Blob --> Download
 ```
 
-Exports include:
+Result exports include:
 
 - Export timestamp
 - Criteria metadata
@@ -560,6 +560,30 @@ Exports include:
 - Word-level metadata where the format supports it
 
 CSV includes columns for set, position, word, part of speech, frequency band, quality score, source, theme, semantic mode, quality mode, seed mode, and seed.
+
+Diagnostics export uses the same `ExportFormat` options. It serializes the currently visible diagnostics rows after diagnostics search and row-filter controls have been applied.
+
+```mermaid
+flowchart LR
+  Generated["Generated diagnostic rows"]
+  Search["Search query"]
+  RowFilter["Row filter"]
+  VisibleRows["Visible diagnostics rows"]
+  Context["Export context"]
+  Stats["Semantic stats"]
+  SerializeDiagnostics["serializeDiagnostics"]
+  DownloadDiagnostics["downloadBlob"]
+
+  Generated --> VisibleRows
+  Search --> VisibleRows
+  RowFilter --> VisibleRows
+  VisibleRows --> SerializeDiagnostics
+  Context --> SerializeDiagnostics
+  Stats --> SerializeDiagnostics
+  SerializeDiagnostics --> DownloadDiagnostics
+```
+
+Diagnostics exports include the export timestamp, row filter, search query, criteria metadata, semantic summary counts, and row-level provenance such as POS source, POS confidence, frequency band, quality score, source, semantic score, semantic strength, and semantic source.
 
 ## Saved Sets And Collections Flow
 
