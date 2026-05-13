@@ -274,13 +274,18 @@ test("applies curated POS overrides for high-impact common words", async () => {
   const db = new SQL.Database(readFileSync("public/data/words.sqlite"));
   const expected = new Map([
     ["ability", "noun"],
+    ["boring", "adjective"],
     ["family", "noun"],
     ["explore", "verb"],
+    ["excited", "adjective"],
     ["discover", "verb"],
     ["gentle", "adjective"],
     ["golden", "adjective"],
+    ["glowing", "adjective"],
+    ["interesting", "adjective"],
     ["lively", "adjective"],
     ["solve", "verb"],
+    ["tired", "adjective"],
     ["transform", "verb"],
     ["wander", "verb"],
     ["whisper", "verb"],
@@ -302,9 +307,11 @@ test("stores alternate POS metadata for ambiguous words", async () => {
     ["light", "|noun|verb|"],
     ["set", "|adjective|noun|"],
     ["run", "|noun|"],
-    ["boring", "|adjective|"],
-    ["excited", "|adjective|"],
-    ["glowing", "|adjective|"],
+    ["boring", "|verb|"],
+    ["excited", "|verb|"],
+    ["glowing", "|verb|"],
+    ["interesting", "|verb|"],
+    ["tired", "|verb|"],
   ]);
 
   for (const [word, alternatePos] of expected) {

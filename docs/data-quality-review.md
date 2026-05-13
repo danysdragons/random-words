@@ -15,8 +15,8 @@ The generated SQLite database stores `base_form`, `pos_source`, and `pos_confide
 
 After the current curated override pass:
 
-- Explicit POS overrides: 332 entries.
-- Morphology-derived POS tags: 17,879 entries.
+- Explicit POS overrides: 337 entries.
+- Morphology-derived POS tags: 17,874 entries.
 - Alternate POS entries: 41 entries.
 - Core words still using default noun fallback: 49 entries.
 - Familiar words still using default noun fallback: 29 entries.
@@ -25,14 +25,19 @@ After the current curated override pass:
 The pass corrected high-impact visible errors such as:
 
 - `ability`: adjective -> noun
+- `boring`: verb -> adjective
+- `excited`: verb -> adjective
 - `family`: adverb -> noun
 - `explore`: noun -> verb
 - `discover`: noun -> verb
 - `gentle`: noun -> adjective
+- `glowing`: verb -> adjective
 - `golden`: verb -> adjective
 - `hidden`: verb -> adjective
+- `interesting`: verb -> adjective
 - `lively`: adverb -> adjective
 - `solve`: noun -> verb
+- `tired`: verb -> adjective
 - `transform`: noun -> verb
 - `wander`: noun -> verb
 - `whisper`: noun -> verb
@@ -47,7 +52,7 @@ Some words are genuinely multi-role, but the v1 database stores one primary POS 
 - `run`: verb or noun
 - `set`: verb, noun, or adjective
 - `painting`: verb form or noun
-- `boring`, `interesting`, `tired`, `excited`: verb participles or adjectives
+- `boring`, `interesting`, `tired`, `excited`, `glowing`: adjective primaries with verb alternates
 
 The current approach chooses a single useful primary POS and records the inference source. A curated `alternate_pos` field lets known ambiguous words match additional POS filters. A future normalized `word_pos` table can replace this if broader multi-role filtering becomes important.
 

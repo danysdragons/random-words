@@ -14,8 +14,8 @@ This report is generated from `public/data/words.sqlite` and highlights current 
 | --- | --- | --- | --- |
 | default | 112479 | 30 | 56.9 |
 | suffix | 39885 | 55 | 57.8 |
-| morphology | 17879 | 80 | 64.6 |
-| override | 332 | 100 | 73.3 |
+| morphology | 17874 | 80 | 64.6 |
+| override | 337 | 100 | 73.3 |
 
 ## Alternate POS Entries
 
@@ -48,7 +48,7 @@ Curated words that can match more than one POS filter.
 | design | noun | verb | default | familiar | 96 |
 | echo | noun | verb | default | familiar | 96 |
 | escape | noun | verb | default | familiar | 96 |
-| glowing | verb | adjective | morphology | familiar | 96 |
+| glowing | adjective | verb | override | familiar | 96 |
 | guide | noun | verb | default | familiar | 96 |
 | harvest | noun | verb | default | familiar | 96 |
 | notice | noun | verb | default | familiar | 96 |
@@ -57,13 +57,13 @@ Curated words that can match more than one POS filter.
 | shelter | noun | verb | suffix | familiar | 96 |
 | study | noun | verb | override | familiar | 96 |
 | thunder | noun | verb | suffix | familiar | 96 |
-| boring | verb | adjective | morphology | standard | 74 |
-| excited | verb | adjective | morphology | standard | 74 |
-| interesting | verb | adjective | morphology | standard | 66 |
+| boring | adjective | verb | override | standard | 74 |
+| excited | adjective | verb | override | standard | 74 |
+| interesting | adjective | verb | override | standard | 66 |
 | painting | verb | noun | morphology | standard | 74 |
 | run | verb | noun | override | standard | 66 |
 | set | verb | adjective, noun | override | standard | 66 |
-| tired | verb | adjective | morphology | standard | 74 |
+| tired | adjective | verb | override | standard | 74 |
 
 ## Core Default Noun Fallbacks
 
@@ -199,15 +199,14 @@ Words that are useful but likely need multi-POS handling or periodic review.
 
 | word | pos | base_form | pos_source | pos_confidence | frequency_band | quality_score |
 | --- | --- | --- | --- | --- | --- | --- |
-| boring | verb | bore | morphology | 80 | standard | 74 |
-| excited | verb | excite | morphology | 80 | standard | 74 |
 | painting | verb | paint | morphology | 80 | standard | 74 |
-| tired | verb | tire | morphology | 80 | standard | 74 |
-| interesting | verb | interest | morphology | 80 | standard | 66 |
 | light | adjective | light | override | 100 | core | 100 |
+| boring | adjective | boring | override | 100 | standard | 74 |
+| excited | adjective | excited | override | 100 | standard | 74 |
+| tired | adjective | tired | override | 100 | standard | 74 |
+| interesting | adjective | interesting | override | 100 | standard | 66 |
 | run | verb | run | override | 100 | standard | 66 |
 | set | verb | set | override | 100 | standard | 66 |
-| glowing | verb | glow | morphology | 80 | familiar | 96 |
 | abandoned | verb | abandon | morphology | 80 | standard | 74 |
 | abandoning | verb | abandon | morphology | 80 | standard | 74 |
 | abased | verb | abase | morphology | 80 | standard | 74 |
@@ -279,6 +278,7 @@ Words that are useful but likely need multi-POS handling or periodic review.
 | accosting | verb | accost | morphology | 80 | standard | 74 |
 | accounted | verb | account | morphology | 80 | standard | 74 |
 | accounting | verb | account | morphology | 80 | standard | 74 |
+| accoutered | verb | accouter | morphology | 80 | standard | 74 |
 
 ## Suggested Next Review
 
