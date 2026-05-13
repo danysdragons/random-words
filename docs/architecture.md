@@ -666,6 +666,7 @@ Current smoke coverage includes:
 - POS filtering behavior
 - Acronym filter visibility
 - Semantic mode visibility
+- Preset group visibility and preset-applied semantic behavior
 - Share URL round trip
 - Diagnostics export
 - Generation warnings
@@ -727,6 +728,7 @@ The current architecture leaves clear extension points:
 
 - Add new filter fields in `Filters`, `DEFAULT_FILTERS`, `queryWords`, share-link validation, and export criteria.
 - Add new semantic modes in `SemanticMode`, `MODE_LABELS`, `datamuse.ts`, and `generator.ts`.
+- Add or reorganize theme presets in `THEME_PRESET_GROUPS`; each preset can apply theme text, semantic mode, and optional phrase behavior.
 - Add new quality metadata in `data/quality/word-quality.json` and `scripts/build-db.mjs`.
 - Add new audit checks in `scripts/audit-db.mjs`.
 - Add new saved-set organization behavior in `SavedSet`, `Collection`, and the saved/collection views.

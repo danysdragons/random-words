@@ -172,22 +172,16 @@ Phrases are gated by this toggle because they behave differently from single wor
 
 ### Preset Themes
 
-Preset themes provide quick starting points. Selecting a preset fills the theme field and highlights the selected preset.
+Preset themes provide quick starting points. Selecting a preset fills the theme field, highlights the selected preset, and applies a recommended semantic mode. You can still edit the theme text or change semantic mode afterward.
 
-Available presets include:
+Presets are grouped by use case:
 
-- Haunted House
-- Desert Ruins
-- Arctic Expedition
-- Clockwork City
-- Cyberpunk Alley
-- Forgotten Library
-- Royal Court
-- Underworld Journey
-- Garden Sanctuary
-- Secret Laboratory
-- Alien Ecosystem
-- Dream Carnival
+- **Story worlds:** locations and settings for narrative generation.
+- **Places & nature:** natural environments and explorable places.
+- **Genre & mood:** atmosphere-forward prompts such as noir, cozy, surreal, or ominous themes.
+- **Speculative:** science fiction, fantasy, and conceptual prompts.
+
+Each preset card shows the preset name, its intended creative direction, and the semantic mode it will apply. Some presets also enable **Include phrases** when phrases are likely to be useful for that prompt.
 
 ### Advanced Semantic Options
 

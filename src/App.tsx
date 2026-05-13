@@ -52,19 +52,59 @@ const POS_OPTIONS: PartOfSpeech[] = [
   "other",
 ];
 
-const THEME_PRESETS = [
-  "Haunted House",
-  "Desert Ruins",
-  "Arctic Expedition",
-  "Clockwork City",
-  "Cyberpunk Alley",
-  "Forgotten Library",
-  "Royal Court",
-  "Underworld Journey",
-  "Garden Sanctuary",
-  "Secret Laboratory",
-  "Alien Ecosystem",
-  "Dream Carnival",
+interface ThemePreset {
+  label: string;
+  theme: string;
+  mode: SemanticMode;
+  intent: string;
+  phrases?: boolean;
+}
+
+interface ThemePresetGroup {
+  name: string;
+  presets: ThemePreset[];
+}
+
+const THEME_PRESET_GROUPS: ThemePresetGroup[] = [
+  {
+    name: "Story worlds",
+    presets: [
+      { label: "Haunted House", theme: "haunted house", mode: "evocative", intent: "Gothic, eerie, domestic" },
+      { label: "Clockwork City", theme: "clockwork city", mode: "concrete", intent: "Mechanisms, streets, civic detail" },
+      { label: "Forgotten Library", theme: "forgotten library", mode: "sensory", intent: "Dust, paper, quiet rooms" },
+      { label: "Royal Court", theme: "royal court", mode: "related", intent: "Power, ceremony, intrigue" },
+      { label: "Secret Laboratory", theme: "secret laboratory", mode: "concrete", intent: "Tools, specimens, machinery" },
+    ],
+  },
+  {
+    name: "Places & nature",
+    presets: [
+      { label: "Desert Ruins", theme: "desert ruins", mode: "concrete", intent: "Stone, heat, lost places" },
+      { label: "Arctic Expedition", theme: "arctic expedition", mode: "actions", intent: "Travel, survival, weather" },
+      { label: "Garden Sanctuary", theme: "garden sanctuary", mode: "sensory", intent: "Greenery, texture, calm" },
+      { label: "Ocean Trench", theme: "ocean trench", mode: "concrete", intent: "Depth, pressure, sea life" },
+      { label: "Volcanic Island", theme: "volcanic island", mode: "sensory", intent: "Heat, ash, terrain" },
+    ],
+  },
+  {
+    name: "Genre & mood",
+    presets: [
+      { label: "Cyberpunk Alley", theme: "cyberpunk alley", mode: "evocative", intent: "Neon, rain, technology" },
+      { label: "Underworld Journey", theme: "underworld journey", mode: "mood", intent: "Mythic, ominous, passage", phrases: true },
+      { label: "Dream Carnival", theme: "dream carnival", mode: "evocative", intent: "Surreal, playful, uncanny" },
+      { label: "Noir City", theme: "noir city", mode: "mood", intent: "Shadows, suspicion, streets" },
+      { label: "Cozy Village", theme: "cozy village", mode: "mood", intent: "Warmth, comfort, neighbors" },
+    ],
+  },
+  {
+    name: "Speculative",
+    presets: [
+      { label: "Alien Ecosystem", theme: "alien ecosystem", mode: "concrete", intent: "Organisms, habitats, anatomy" },
+      { label: "Space Station", theme: "space station", mode: "concrete", intent: "Modules, equipment, orbit" },
+      { label: "Time Loop", theme: "time loop", mode: "related", intent: "Repetition, causality, clues", phrases: true },
+      { label: "Mythic Forest", theme: "mythic forest", mode: "evocative", intent: "Wonder, danger, old magic" },
+    ],
+  },
 ];
 
 const DEFAULT_FILTERS: Filters = {
@@ -910,6 +950,15 @@ function ThemePanel({
   updateFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const selectedPreset = THEME_PRESET_GROUPS.flatMap((group) => group.presets).find(
+    (preset) => normalizeTheme(filters.theme) === normalizeTheme(preset.theme),
+  );
+
+  function applyPreset(preset: ThemePreset) {
+    updateFilter("theme", preset.theme);
+    updateFilter("semanticMode", preset.mode);
+    if (preset.phrases !== undefined) updateFilter("includePhrases", preset.phrases);
+  }
 
   return (
     <section className="panel theme-panel">
@@ -949,22 +998,38 @@ function ThemePanel({
         onChange={(checked) => updateFilter("includePhrases", checked)}
       />
       <div className="field">
-        <label>Preset themes</label>
-        <div className="preset-grid">
-          {THEME_PRESETS.map((preset) => {
-            const selected = normalizeTheme(filters.theme) === normalizeTheme(preset);
-            return (
-              <button
-                key={preset}
-                className={selected ? "selected" : ""}
-                aria-pressed={selected}
-                onClick={() => updateFilter("theme", preset.toLowerCase())}
-              >
-                {selected && <Star size={14} />}
-                {preset}
-              </button>
-            );
-          })}
+        <div className="field-title">
+          <label>Preset themes</label>
+          <span className="preset-status">
+            {selectedPreset ? `${selectedPreset.label} · ${MODE_LABELS[selectedPreset.mode]}` : "Free entry"}
+          </span>
+        </div>
+        <div className="preset-groups">
+          {THEME_PRESET_GROUPS.map((group) => (
+            <section className="preset-group" key={group.name}>
+              <h3>{group.name}</h3>
+              <div className="preset-grid">
+                {group.presets.map((preset) => {
+                  const selected = normalizeTheme(filters.theme) === normalizeTheme(preset.theme);
+                  return (
+                    <button
+                      key={preset.theme}
+                      className={selected ? "selected" : ""}
+                      aria-pressed={selected}
+                      onClick={() => applyPreset(preset)}
+                    >
+                      <span className="preset-name">
+                        {selected && <Star size={14} />}
+                        {preset.label}
+                      </span>
+                      <span className="preset-intent">{preset.intent}</span>
+                      <span className="preset-mode">{MODE_LABELS[preset.mode]}{preset.phrases ? " · phrases" : ""}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       </div>
       <button className="advanced" aria-expanded={advancedOpen} aria-controls="advanced-semantic-options" onClick={() => setAdvancedOpen((current) => !current)}>
