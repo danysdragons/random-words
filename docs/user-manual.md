@@ -347,6 +347,29 @@ Click **Clear** to remove generation history.
 
 Open **Settings** from the top bar.
 
+### Display Settings
+
+Use **UI theme** to choose how the interface is styled.
+
+Available UI themes:
+
+- **System:** follows your operating system or browser light/dark preference.
+- **Light:** the default light interface.
+- **Dark:** a low-glare dark interface.
+- **High Contrast:** stronger borders, brighter focus states, and high contrast surfaces.
+- **Ink:** a minimal black-and-white interface.
+- **Forest:** a calm green-accented interface.
+- **Ocean:** a blue/teal interface.
+- **Sunrise:** a warm amber/coral interface.
+- **Solar Light:** a light Solarized-inspired palette.
+- **Solar Dark:** a dark Solarized-inspired palette.
+
+The selected UI theme is saved locally in the browser. When **System** is selected, the app updates automatically if your system light/dark preference changes.
+
+Enable **Show word details** when you want generated word tiles to show metadata such as base form, POS source, confidence, and semantic source.
+
+### Data Actions
+
 Available actions:
 
 - **Reset generator defaults:** restores default criteria.
@@ -372,6 +395,7 @@ The app stores several kinds of data locally in your browser:
 - Saved sets
 - Collections
 - Generation history
+- Display settings, including UI theme and word detail display preference
 - Datamuse semantic cache
 - Definition cache
 

@@ -197,23 +197,54 @@ flowchart TD
 - `status`
 - `toast`
 - `isGenerating`
+- `systemPrefersDark`
+- `activeUiTheme`
 
 Most user-facing state is persisted through `usePersistentState`, which writes JSON to local storage.
 
 ### View Model
 
-The app has four top-level views:
+The app has six top-level views:
 
 - `generator`
 - `saved`
 - `collections`
+- `diagnostics`
 - `about`
+- `manual`
 
 The generator view contains three functional panels:
 
 - Criteria panel
 - Generated word sets panel
 - Theme, semantics, and history panel
+
+### UI Theme Flow
+
+The UI theme system is runtime-only and does not affect generation, exports, or share links. Theme choice is stored as part of `displaySettings`.
+
+```mermaid
+flowchart LR
+  Settings["Settings dialog"]
+  DisplaySettings["displaySettings.uiTheme"]
+  Storage["localStorage random-words:display:v1"]
+  SystemPref["prefers-color-scheme"]
+  Resolve["resolveUiTheme"]
+  Root["documentElement data-ui-theme"]
+  CSS["CSS custom properties"]
+  UI["Rendered interface"]
+
+  Settings --> DisplaySettings
+  DisplaySettings --> Storage
+  Storage --> DisplaySettings
+  DisplaySettings --> Resolve
+  SystemPref --> Resolve
+  Resolve --> Root
+  Root --> CSS
+  CSS --> UI
+```
+
+Supported stored theme values are `system`, `light`, `dark`, `high-contrast`, `ink`, `forest`, `ocean`, `sunrise`, `solar-light`, and `solar-dark`. The stored `system` value resolves at runtime to either `light` or `dark`.
 
 ## Filter And Query Flow
 
@@ -441,6 +472,7 @@ Persisted state includes:
 - Generation history
 - Saved sets
 - Collections
+- Display settings, including UI theme and word details preference
 
 ### Persisted Caches
 
@@ -449,7 +481,7 @@ Persisted caches include:
 - Semantic result cache
 - Definition cache
 
-The settings modal exposes actions for clearing semantic caches and workspace data.
+The settings modal exposes controls for UI theme and word detail display, plus actions for clearing semantic caches and workspace data.
 
 ## Share Link Flow
 

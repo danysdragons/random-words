@@ -2,6 +2,8 @@
 
 A static random English word and phrase set generator backed by a generated SQLite artifact.
 
+The app supports local criteria filtering, optional Datamuse-powered semantic themes, saved set libraries, diagnostics, import/export, and selectable UI themes.
+
 ## Documentation
 
 - [User manual](docs/user-manual.md)
