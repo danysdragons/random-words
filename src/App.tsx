@@ -22,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
-import { loadWordDatabase, queryWords, type WordDatabase } from "./data";
+import { loadWordDatabase, localPoolCriteriaKey, queryWords, type WordDatabase } from "./data";
 import { fetchDefinitions, fetchSemanticWords } from "./datamuse";
 import { generateSets } from "./generator";
 import userManualMarkdown from "../docs/user-manual.md?raw";
@@ -237,6 +237,7 @@ function App() {
     DEFAULT_DISPLAY_SETTINGS,
   );
   const [basePool, setBasePool] = useState<WordEntry[]>([]);
+  const [basePoolKey, setBasePoolKey] = useState("");
   const [semanticPool, setSemanticPool] = useState<WordEntry[]>([]);
   const [sets, setSets] = usePersistentState<GeneratedSet[]>("random-words:current-sets:v1", []);
   const [history, setHistory] = usePersistentState<HistoryEntry[]>("random-words:history:v1", []);
@@ -251,6 +252,7 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [systemPrefersDark, setSystemPrefersDark] = useState(false);
   const activeUiTheme = resolveUiTheme(displaySettings.uiTheme, systemPrefersDark);
+  const activeLocalPoolKey = useMemo(() => localPoolCriteriaKey(filters), [filters]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -292,7 +294,8 @@ function App() {
   useEffect(() => {
     if (!wordDb) return;
     setBasePool(queryWords(wordDb.db, filters));
-  }, [wordDb, filters]);
+    setBasePoolKey(activeLocalPoolKey);
+  }, [wordDb, activeLocalPoolKey]);
 
   useEffect(() => {
     if (!toast) return;
@@ -325,7 +328,7 @@ function App() {
     setStatus("");
     try {
       const semanticWords = await fetchSemanticWords(nextFilters);
-      const generated = generateSets(queryWords(wordDb.db, nextFilters), semanticWords, nextFilters);
+      const generated = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters);
       setSemanticPool(semanticWords);
       setSets(generated);
       setHistory((current) =>
@@ -362,7 +365,7 @@ function App() {
     setIsGenerating(true);
     try {
       const semanticWords = await fetchSemanticWords(nextFilters);
-      const [replacement] = generateSets(queryWords(wordDb.db, nextFilters), semanticWords, nextFilters);
+      const [replacement] = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters);
       if (!replacement) return;
       setSemanticPool(semanticWords);
       setSets((current) => current.map((set, index) => (index === targetIndex ? replacement : set)));
@@ -376,6 +379,12 @@ function App() {
 
   function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function getLocalPool(db: WordDatabase, nextFilters: Filters) {
+    const nextLocalPoolKey = localPoolCriteriaKey(nextFilters);
+    if (nextLocalPoolKey === basePoolKey) return basePool;
+    return queryWords(db.db, nextFilters);
   }
 
   function randomizeSeed() {

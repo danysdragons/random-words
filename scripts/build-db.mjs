@@ -1,5 +1,5 @@
 import initSqlJs from "sql.js";
-import { unzipSync, strFromU8 } from "fflate";
+import { gzipSync, unzipSync, strFromU8 } from "fflate";
 import {
   existsSync,
   mkdirSync,
@@ -12,6 +12,7 @@ const VERSION = "2026.02.25";
 const SOURCE_BASE = `https://sourceforge.net/projects/wordlist/files/speller/${VERSION}`;
 const RAW_DIR = resolve("data/raw/scowl");
 const OUT_DB = resolve("public/data/words.sqlite");
+const OUT_DB_GZIP = `${OUT_DB}.gz`;
 const OUT_META = resolve("public/data/build-meta.json");
 const QUALITY_DATA = JSON.parse(readFileSync(resolve("data/quality/word-quality.json"), "utf8"));
 
@@ -422,6 +423,7 @@ async function main() {
   const acronymHintCount = sortedRecords.filter((record) => record.acronymHint).length;
   const dbBytes = await createDatabase(sortedRecords, sourceCount);
   writeFileSync(OUT_DB, Buffer.from(dbBytes));
+  writeFileSync(OUT_DB_GZIP, Buffer.from(gzipSync(dbBytes, { level: 9 })));
 
   const meta = {
     source: `SCOWL/ESDB ${VERSION}`,
@@ -444,6 +446,7 @@ async function main() {
   };
   writeFileSync(OUT_META, `${JSON.stringify(meta, null, 2)}\n`);
   console.log(`Wrote ${OUT_DB} with ${sortedRecords.length.toLocaleString()} words.`);
+  console.log(`Wrote ${OUT_DB_GZIP}.`);
 }
 
 main().catch((error) => {

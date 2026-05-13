@@ -105,6 +105,45 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.getByText(/of 12 rows/)).toBeVisible();
 });
 
+test("prefers the compressed SQLite artifact", async ({ page }) => {
+  let compressedRequests = 0;
+  let rawRequests = 0;
+  await page.route("**/data/**", async (route) => {
+    const url = route.request().url();
+    if (url.endsWith("/data/words.sqlite.gz")) compressedRequests += 1;
+    if (url.endsWith("/data/words.sqlite")) rawRequests += 1;
+    await route.continue();
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+  expect(compressedRequests).toBeGreaterThan(0);
+  expect(rawRequests).toBe(0);
+});
+
+test("normalizes older persisted filter state", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "random-words:filters:v1",
+      JSON.stringify({
+        wordsPerSet: 2,
+        setCount: 1,
+        minLength: 4,
+        maxLength: 8,
+        includeRare: false,
+        qualityMode: "balanced",
+        selectedPos: ["noun"],
+        dialect: "us",
+      }),
+    );
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  await expect(page.locator(".word-tile")).toHaveCount(2);
+});
+
 test("can select and persist a UI theme", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
@@ -181,6 +220,7 @@ test("shows semantic pool provenance for themed generation", async ({ page }) =>
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
 
   await page.getByPlaceholder("e.g. sunken city, cozy village").fill("ocean");
+  await page.getByRole("button", { name: "Strict category", exact: true }).click();
   await page.getByRole("button", { name: "Generate", exact: true }).click();
 
   await expect(page.locator(".metric").filter({ hasText: "Semantic matches" })).toContainText("3");

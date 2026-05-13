@@ -1,4 +1,5 @@
 import initSqlJs, { Database } from "sql.js";
+import { gunzipSync } from "fflate";
 import type { BuildMeta, Dialect, Filters, PartOfSpeech, WordEntry } from "./types";
 
 export interface WordDatabase {
@@ -20,21 +21,46 @@ export async function loadWordDatabase(): Promise<WordDatabase> {
       return `${import.meta.env.BASE_URL}${file}`;
     },
   });
-  const [dbResponse, metaResponse] = await Promise.all([
-    fetch(`${import.meta.env.BASE_URL}data/words.sqlite`),
+  const [dbBytes, metaResponse] = await Promise.all([
+    fetchDatabaseBytes(),
     fetch(`${import.meta.env.BASE_URL}data/build-meta.json`).catch(() => null),
   ]);
 
-  if (!dbResponse.ok) {
-    throw new Error(`Unable to load words.sqlite (${dbResponse.status})`);
-  }
-
-  const dbBytes = new Uint8Array(await dbResponse.arrayBuffer());
   const meta = metaResponse?.ok ? ((await metaResponse.json()) as BuildMeta) : null;
   return { db: new SQL.Database(dbBytes), meta };
 }
 
+async function fetchDatabaseBytes() {
+  const compressedResponse = await fetch(`${import.meta.env.BASE_URL}data/words.sqlite.gz`).catch(() => null);
+  if (compressedResponse?.ok) {
+    const compressedBytes = new Uint8Array(await compressedResponse.arrayBuffer());
+    if (isSqliteDatabase(compressedBytes)) return compressedBytes;
+    try {
+      return gunzipSync(compressedBytes);
+    } catch {
+      return fetchRawDatabaseBytes();
+    }
+  }
+
+  return fetchRawDatabaseBytes();
+}
+
+async function fetchRawDatabaseBytes() {
+  const dbResponse = await fetch(`${import.meta.env.BASE_URL}data/words.sqlite`);
+  if (!dbResponse.ok) {
+    throw new Error(`Unable to load words.sqlite (${dbResponse.status})`);
+  }
+  return new Uint8Array(await dbResponse.arrayBuffer());
+}
+
+function isSqliteDatabase(bytes: Uint8Array) {
+  const sqliteHeader = "SQLite format 3";
+  if (bytes.length < sqliteHeader.length) return false;
+  return sqliteHeader.split("").every((character, index) => bytes[index] === character.charCodeAt(0));
+}
+
 export function queryWords(db: Database, filters: Filters): WordEntry[] {
+  const selectedPos = selectedPartOfSpeech(filters.selectedPos);
   const where: string[] = [
     "length BETWEEN ? AND ?",
     "is_phrase = 0",
@@ -43,20 +69,22 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
   const params: Array<string | number> = [filters.minLength, filters.maxLength];
 
   if (!filters.includeRare) where.push("commonness = 'common'");
-  if (filters.selectedPos.length > 0 && filters.selectedPos.length < 9) {
-    const primaryPlaceholders = filters.selectedPos.map(() => "?").join(", ");
-    const alternateClauses = filters.selectedPos.map(() => "alternate_pos LIKE ?").join(" OR ");
+  if (selectedPos.length > 0 && selectedPos.length < 9) {
+    const primaryPlaceholders = selectedPos.map(() => "?").join(", ");
+    const alternateClauses = selectedPos.map(() => "alternate_pos LIKE ?").join(" OR ");
     where.push(`(pos IN (${primaryPlaceholders}) OR ${alternateClauses})`);
-    params.push(...filters.selectedPos);
-    params.push(...filters.selectedPos.map((pos) => `%|${pos}|%`));
+    params.push(...selectedPos);
+    params.push(...selectedPos.map((pos) => `%|${pos}|%`));
   }
-  if (filters.startsWith.trim()) {
+  const startsWith = normalizedText(filters.startsWith);
+  const endsWith = normalizedText(filters.endsWith);
+  if (startsWith) {
     where.push("normalized LIKE ?");
-    params.push(`${filters.startsWith.trim().toLowerCase()}%`);
+    params.push(`${startsWith}%`);
   }
-  if (filters.endsWith.trim()) {
+  if (endsWith) {
     where.push("normalized LIKE ?");
-    params.push(`%${filters.endsWith.trim().toLowerCase()}`);
+    params.push(`%${endsWith}`);
   }
   for (const letter of uniqueLetters(filters.contains)) {
     where.push("normalized LIKE ?");
@@ -103,6 +131,28 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
     .filter((entry) => passesAdvancedFilters(entry.word, filters));
 }
 
+export function localPoolCriteriaKey(filters: Filters) {
+  return JSON.stringify({
+    minLength: filters.minLength,
+    maxLength: filters.maxLength,
+    includeRare: filters.includeRare,
+    selectedPos: selectedPartOfSpeech(filters.selectedPos).sort(),
+    dialect: filters.dialect,
+    startsWith: normalizedText(filters.startsWith),
+    endsWith: normalizedText(filters.endsWith),
+    contains: uniqueLetters(filters.contains).sort().join(""),
+    excludes: uniqueLetters(filters.excludes).sort().join(""),
+    wordPattern: normalizedText(filters.wordPattern),
+    minSyllables: filters.minSyllables,
+    maxSyllables: filters.maxSyllables,
+    excludeOffensive: filters.excludeOffensive,
+    noProperNouns: filters.noProperNouns,
+    noAcronyms: filters.noAcronyms,
+    noContractions: filters.noContractions,
+    noHyphenated: filters.noHyphenated,
+  });
+}
+
 function decodeAlternatePos(value: string): PartOfSpeech[] {
   return value
     .split("|")
@@ -111,7 +161,8 @@ function decodeAlternatePos(value: string): PartOfSpeech[] {
     .filter((pos) => pos !== "other");
 }
 
-function uniqueLetters(value: string) {
+function uniqueLetters(value: unknown) {
+  if (typeof value !== "string") return [];
   return [...new Set(value.toLowerCase().replace(/[^a-z]/g, "").split(""))];
 }
 
@@ -131,8 +182,8 @@ export function estimateSyllables(word: string) {
   return Math.max(1, groups - silentE);
 }
 
-function matchesWordPattern(word: string, pattern: string) {
-  const cleanPattern = pattern.trim().toLowerCase();
+function matchesWordPattern(word: string, pattern: unknown) {
+  const cleanPattern = normalizedText(pattern);
   if (!cleanPattern) return true;
   const normalized = word.toLowerCase();
   const escaped = cleanPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
@@ -141,6 +192,15 @@ function matchesWordPattern(word: string, pattern: string) {
   } catch {
     return true;
   }
+}
+
+function normalizedText(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function selectedPartOfSpeech(value: unknown): PartOfSpeech[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => normalizePos(String(item))).filter((pos) => pos !== "other");
 }
 
 function normalizePosSource(value: string): WordEntry["posSource"] {

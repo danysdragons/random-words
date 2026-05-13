@@ -4,6 +4,7 @@ output/
 .DS_Store
 data/raw/
 public/data/*.sqlite
+public/data/*.sqlite.gz
 public/data/build-meta.json
 public/sql-wasm.wasm
 *.tsbuildinfo

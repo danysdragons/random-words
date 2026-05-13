@@ -2,7 +2,7 @@
 
 This document describes the architecture of Random Words, the major runtime components, the build-time data pipeline, and the data flows used for generation, semantic expansion, persistence, sharing, export, and deployment.
 
-Random Words is intentionally built as a static browser application. There is no application server at runtime. The app ships a generated SQLite database as a static asset, loads it in the browser with `sql.js`, and optionally calls Datamuse directly from the browser for theme expansion and definitions.
+Random Words is intentionally built as a static browser application. There is no application server at runtime. The app ships a generated SQLite database as a static asset, prefers a gzip-compressed copy for faster static hosting downloads, loads it in the browser with `sql.js`, and optionally calls Datamuse directly from the browser for theme expansion and definitions.
 
 ## System Overview
 
@@ -11,7 +11,7 @@ flowchart LR
   User["User"]
   Browser["Browser Runtime<br/>React + TypeScript"]
   SQLiteWasm["sql.js WASM"]
-  WordDb["Static SQLite Artifact<br/>public/data/words.sqlite"]
+  WordDb["Static SQLite Artifact<br/>public/data/words.sqlite.gz preferred<br/>public/data/words.sqlite fallback"]
   BuildMeta["Build Metadata<br/>public/data/build-meta.json"]
   Datamuse["Datamuse API"]
   LocalStorage["Browser Local Storage"]
@@ -37,7 +37,7 @@ The core design choices are:
 | Area | Main Files | Responsibility |
 | --- | --- | --- |
 | App shell and UI | `src/App.tsx`, `src/styles.css` | React state, controls, views, modals, sharing, exporting, local persistence |
-| Static DB loading and filtering | `src/data.ts` | Load `words.sqlite`, load build metadata, translate filters into SQL queries |
+| Static DB loading and filtering | `src/data.ts` | Load compressed `words.sqlite.gz` with raw SQLite fallback, load build metadata, translate filters into SQL queries |
 | Semantic and definition lookup | `src/datamuse.ts` | Datamuse requests, semantic mode mapping, client-side semantic filtering, local cache |
 | Generation algorithm | `src/generator.ts` | Seeded random generation, semantic/base pool blending, quality weighting, duplicate-family reduction |
 | Shared types | `src/types.ts` | Filter, word, saved set, collection, metadata, semantic mode, quality mode definitions |
@@ -61,6 +61,7 @@ flowchart TD
   Normalize["Normalize words<br/>lowercase, NFKC, punctuation flags"]
   Enrich["Infer and attach metadata<br/>POS, dialects, commonness, hints, frequency band, quality score"]
   SQLite["Create SQLite database<br/>public/data/words.sqlite"]
+  SQLiteGzip["Compress database<br/>public/data/words.sqlite.gz"]
   Meta["Write build metadata<br/>public/data/build-meta.json"]
   CopyWasm["npm run copy:wasm<br/>public/sql-wasm.wasm"]
   Typecheck["tsc -b"]
@@ -73,9 +74,10 @@ flowchart TD
   Download --> Normalize
   Normalize --> Enrich
   Enrich --> SQLite
+  SQLite --> SQLiteGzip
   Enrich --> Meta
   Start --> CopyWasm
-  SQLite --> Typecheck
+  SQLiteGzip --> Typecheck
   Meta --> Typecheck
   CopyWasm --> Typecheck
   Typecheck --> Vite
@@ -687,7 +689,7 @@ The app currently handles major runtime failures through status messages rather 
 
 Important failure cases:
 
-- `words.sqlite` cannot be loaded
+- `words.sqlite.gz` and fallback `words.sqlite` cannot be loaded
 - Datamuse semantic request fails
 - Generation yields smaller sets because filters are too narrow
 - Theme criteria produce no semantic matches or mostly fallback output
