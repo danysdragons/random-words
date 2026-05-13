@@ -30,6 +30,7 @@ import type {
   AppView,
   Collection,
   Dialect,
+  DuplicateMode,
   ExportFormat,
   Filters,
   GeneratedSet,
@@ -120,7 +121,11 @@ const DEFAULT_FILTERS: Filters = {
   endsWith: "",
   contains: "",
   excludes: "",
+  wordPattern: "",
+  minSyllables: 1,
+  maxSyllables: 8,
   uniqueWords: true,
+  duplicateMode: "family",
   excludeOffensive: true,
   noProperNouns: true,
   noAcronyms: true,
@@ -195,6 +200,12 @@ const QUALITY_LABELS: Record<QualityMode, string> = {
   balanced: "Balanced",
   common: "Common first",
   surprising: "More surprising",
+};
+
+const DUPLICATE_LABELS: Record<DuplicateMode, string> = {
+  allow: "Allow repeats",
+  word: "Unique words",
+  family: "Unique families",
 };
 
 interface HistoryEntry {
@@ -932,7 +943,62 @@ function CriteriaPanel({
       <TextFilter label="Contains (all letters)" value={filters.contains} onChange={(value) => updateFilter("contains", value)} placeholder="e.g. st" />
       <TextFilter label="Excludes (any letters)" value={filters.excludes} onChange={(value) => updateFilter("excludes", value)} placeholder="e.g. qxz" />
 
-      <Toggle label="Unique words only" checked={filters.uniqueWords} onChange={(checked) => updateFilter("uniqueWords", checked)} />
+      <TextFilter
+        label="Word pattern"
+        value={filters.wordPattern}
+        onChange={(value) => updateFilter("wordPattern", value)}
+        placeholder="e.g. c*v?rn"
+      />
+
+      <div className="field compact">
+        <label>Syllables (approx.)</label>
+        <div className="range-pair syllable-pair">
+          <input
+            type="number"
+            min={1}
+            max={8}
+            aria-label="Minimum syllables"
+            value={filters.minSyllables}
+            onChange={(event) => updateFilter("minSyllables", Number(event.target.value))}
+          />
+          <input
+            type="range"
+            min={1}
+            max={8}
+            aria-label="Maximum syllables"
+            value={filters.maxSyllables}
+            onChange={(event) => updateFilter("maxSyllables", Number(event.target.value))}
+          />
+          <input
+            type="number"
+            min={1}
+            max={8}
+            aria-label="Maximum syllables"
+            value={filters.maxSyllables}
+            onChange={(event) => updateFilter("maxSyllables", Number(event.target.value))}
+          />
+        </div>
+      </div>
+
+      <div className="field">
+        <label>Duplicate control</label>
+        <div className="segmented duplicate-segmented" role="group" aria-label="Duplicate control">
+          {(Object.keys(DUPLICATE_LABELS) as DuplicateMode[]).map((mode) => (
+            <button
+              key={mode}
+              className={filters.duplicateMode === mode ? "active" : ""}
+              aria-pressed={filters.duplicateMode === mode}
+              onClick={() => {
+                updateFilter("duplicateMode", mode);
+                updateFilter("uniqueWords", mode !== "allow");
+              }}
+            >
+              {DUPLICATE_LABELS[mode]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <Toggle label="Exclude offensive words" checked={filters.excludeOffensive} onChange={(checked) => updateFilter("excludeOffensive", checked)} />
       <Toggle label="No proper nouns" checked={filters.noProperNouns} onChange={(checked) => updateFilter("noProperNouns", checked)} />
       <Toggle label="No acronyms / initialisms" checked={filters.noAcronyms} onChange={(checked) => updateFilter("noAcronyms", checked)} />
@@ -2064,6 +2130,9 @@ function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filt
     `Seed mode: ${criteria.useSeededGeneration ? "seeded" : "fresh each click"}`,
     `Seed: ${criteria.seed}`,
     `Length: ${criteria.minLength}-${criteria.maxLength}`,
+    `Syllables: ${criteria.minSyllables}-${criteria.maxSyllables}`,
+    `Pattern: ${criteria.wordPattern || "none"}`,
+    `Duplicate control: ${DUPLICATE_LABELS[criteria.duplicateMode]}`,
     `Parts of speech: ${criteria.selectedPos.join(", ") || "any"}`,
     `Dialect: ${criteria.dialect}`,
   ].join("\n");
@@ -2366,7 +2435,11 @@ function normalizeSharedFilters(payload: unknown): Filters | null {
     endsWith: stringValue(payload.endsWith),
     contains: stringValue(payload.contains),
     excludes: stringValue(payload.excludes),
+    wordPattern: stringValue(payload.wordPattern),
+    minSyllables: boundedNumber(payload.minSyllables, DEFAULT_FILTERS.minSyllables, 1, 8),
+    maxSyllables: boundedNumber(payload.maxSyllables, DEFAULT_FILTERS.maxSyllables, 1, 8),
     uniqueWords: booleanValue(payload.uniqueWords, DEFAULT_FILTERS.uniqueWords),
+    duplicateMode: duplicateModeValue(payload.duplicateMode, booleanValue(payload.uniqueWords, DEFAULT_FILTERS.uniqueWords)),
     excludeOffensive: booleanValue(payload.excludeOffensive, DEFAULT_FILTERS.excludeOffensive),
     noProperNouns: booleanValue(payload.noProperNouns, DEFAULT_FILTERS.noProperNouns),
     noAcronyms: booleanValue(payload.noAcronyms, DEFAULT_FILTERS.noAcronyms),
@@ -2442,6 +2515,11 @@ function qualityModeValue(value: unknown): QualityMode {
   return value === "balanced" || value === "common" || value === "surprising"
     ? value
     : DEFAULT_FILTERS.qualityMode;
+}
+
+function duplicateModeValue(value: unknown, uniqueWords: boolean): DuplicateMode {
+  if (value === "allow" || value === "word" || value === "family") return value;
+  return uniqueWords ? DEFAULT_FILTERS.duplicateMode : "allow";
 }
 
 function uiThemeValue(value: unknown): UiTheme {

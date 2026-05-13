@@ -83,22 +83,24 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
   );
 
   if (!result[0]) return [];
-  return result[0].values.map((row) => ({
-    id: Number(row[0]),
-    word: String(row[1]),
-    length: Number(row[2]),
-    pos: normalizePos(String(row[3])),
-    baseForm: String(row[7]),
-    posSource: normalizePosSource(String(row[8])),
-    posConfidence: Number(row[9]),
-    alternatePos: decodeAlternatePos(String(row[10])),
-    commonness: row[4] === "rare" ? "rare" : "common",
-    source: "scowl",
-    score: Number(row[5]),
-    qualityScore: Number(row[5]),
-    frequencyBand: String(row[6]),
-    isPhrase: false,
-  }));
+  return result[0].values
+    .map((row) => ({
+      id: Number(row[0]),
+      word: String(row[1]),
+      length: Number(row[2]),
+      pos: normalizePos(String(row[3])),
+      baseForm: String(row[7]),
+      posSource: normalizePosSource(String(row[8])),
+      posConfidence: Number(row[9]),
+      alternatePos: decodeAlternatePos(String(row[10])),
+      commonness: row[4] === "rare" ? "rare" as const : "common" as const,
+      source: "scowl" as const,
+      score: Number(row[5]),
+      qualityScore: Number(row[5]),
+      frequencyBand: String(row[6]),
+      isPhrase: false,
+    }))
+    .filter((entry) => passesAdvancedFilters(entry.word, filters));
 }
 
 function decodeAlternatePos(value: string): PartOfSpeech[] {
@@ -111,6 +113,34 @@ function decodeAlternatePos(value: string): PartOfSpeech[] {
 
 function uniqueLetters(value: string) {
   return [...new Set(value.toLowerCase().replace(/[^a-z]/g, "").split(""))];
+}
+
+export function passesAdvancedFilters(word: string, filters: Filters) {
+  if (!matchesWordPattern(word, filters.wordPattern)) return false;
+  const syllables = estimateSyllables(word);
+  const minSyllables = Math.min(filters.minSyllables, filters.maxSyllables);
+  const maxSyllables = Math.max(filters.minSyllables, filters.maxSyllables);
+  return syllables >= minSyllables && syllables <= maxSyllables;
+}
+
+export function estimateSyllables(word: string) {
+  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (!normalized) return 1;
+  const groups = normalized.match(/[aeiouy]+/g)?.length ?? 1;
+  const silentE = normalized.length > 3 && normalized.endsWith("e") && !/[aeiouy]le$/.test(normalized) ? 1 : 0;
+  return Math.max(1, groups - silentE);
+}
+
+function matchesWordPattern(word: string, pattern: string) {
+  const cleanPattern = pattern.trim().toLowerCase();
+  if (!cleanPattern) return true;
+  const normalized = word.toLowerCase();
+  const escaped = cleanPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
+  try {
+    return new RegExp(`^${escaped}$`).test(normalized);
+  } catch {
+    return true;
+  }
 }
 
 function normalizePosSource(value: string): WordEntry["posSource"] {

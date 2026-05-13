@@ -1,5 +1,6 @@
 import { normalizePos } from "./data";
 import type { Filters, WordEntry } from "./types";
+import { passesAdvancedFilters } from "./data";
 
 interface DatamuseWord {
   word: string;
@@ -220,6 +221,7 @@ function passesClientFilters(entry: WordEntry, filters: Filters) {
   if (filters.noHyphenated && entry.word.includes("-")) return false;
   if (filters.noAcronyms && isAcronymLike(entry.word)) return false;
   if (filters.excludeOffensive && OFFENSIVE_WORDS.has(entry.word)) return false;
+  if (!passesAdvancedFilters(entry.word, filters)) return false;
 
   const normalized = entry.word.replace(/[^a-z]/g, "");
   for (const letter of filters.contains.toLowerCase().replace(/[^a-z]/g, "")) {

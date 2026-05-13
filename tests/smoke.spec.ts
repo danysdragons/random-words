@@ -226,6 +226,25 @@ test("uses alternate POS entries when filtering generated words", async ({ page 
   await expect(page.getByLabel("Diagnostics warnings")).toContainText("Generated output is smaller than requested");
 });
 
+test("applies advanced pattern, syllable, and duplicate controls", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByLabel("Minimum word length").fill("6");
+  await page.getByLabel("Maximum word length").last().fill("8");
+  await page.getByLabel("Word pattern").fill("c*e");
+  await page.getByLabel("Minimum syllables").fill("2");
+  await page.getByLabel("Maximum syllables").last().fill("2");
+  await expect(page.getByRole("button", { name: "Unique families" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Unique words" }).click();
+  await expect(page.getByRole("button", { name: "Unique words" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+
+  const words = await page.locator(".word-tile > strong").allTextContents();
+  expect(words.length).toBeGreaterThan(0);
+  expect(words.every((word) => /^c.*e$/.test(word))).toBe(true);
+});
+
 test("classifies common inflected verb forms as verbs", async () => {
   const SQL = await initSqlJs();
   const db = new SQL.Database(readFileSync("public/data/words.sqlite"));

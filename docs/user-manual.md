@@ -103,12 +103,29 @@ Use text filters to constrain word shape:
 - **Ends with:** only include words ending with the entered text.
 - **Contains:** require every entered letter to appear somewhere in the word.
 - **Excludes:** reject words containing any entered letter.
+- **Word pattern:** match the whole word using `*` for any sequence of characters and `?` for one character.
 
 Text filters are case-insensitive and apply to normalized word forms.
 
-### Unique Words Only
+Examples:
 
-When enabled, the generator avoids repeating the same word across visible sets. It also reduces obvious same-family clusters, such as plural or inflected variants, so generated sets are less likely to contain near-duplicates.
+- `c*e` matches words beginning with `c` and ending with `e`.
+- `??ing` matches five-letter words ending in `ing`.
+- `*tion` matches words ending in `tion`.
+
+### Syllables
+
+Use **Syllables (approx.)** to target shorter, punchier words or longer, more elaborate words.
+
+Syllable counts are estimated from vowel groups, so they are useful for broad shaping rather than pronunciation-perfect filtering.
+
+### Duplicate Control
+
+Duplicate control determines how strictly generated sets avoid repeats:
+
+- **Allow repeats:** allows the same word to appear in different generated sets when weighting brings it up again.
+- **Unique words:** prevents the exact same word from repeating across generated sets.
+- **Unique families:** prevents exact repeats and close root-family repeats such as inflected forms. This is the default.
 
 ### Exclude Offensive Words
 

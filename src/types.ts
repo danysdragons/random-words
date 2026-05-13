@@ -23,6 +23,8 @@ export type SemanticMode =
 
 export type QualityMode = "balanced" | "common" | "surprising";
 
+export type DuplicateMode = "allow" | "word" | "family";
+
 export interface Filters {
   wordsPerSet: number;
   setCount: number;
@@ -36,7 +38,11 @@ export interface Filters {
   endsWith: string;
   contains: string;
   excludes: string;
+  wordPattern: string;
+  minSyllables: number;
+  maxSyllables: number;
   uniqueWords: boolean;
+  duplicateMode: DuplicateMode;
   excludeOffensive: boolean;
   noProperNouns: boolean;
   noAcronyms: boolean;

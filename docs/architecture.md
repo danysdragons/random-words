@@ -257,6 +257,7 @@ flowchart LR
   Params["SQL parameters"]
   SqlJs["sql.js Database.exec"]
   Rows["SQLite rows"]
+  Advanced["Client-side advanced filters"]
   WordEntries["WordEntry[]"]
 
   Filters --> SQLWhere
@@ -264,7 +265,8 @@ flowchart LR
   SQLWhere --> SqlJs
   Params --> SqlJs
   SqlJs --> Rows
-  Rows --> WordEntries
+  Rows --> Advanced
+  Advanced --> WordEntries
 ```
 
 The base query always applies:
@@ -281,13 +283,15 @@ Optional filters apply:
 - Ends with
 - Contains all letters
 - Excludes any letters
+- Word pattern, applied client-side with `*` and `?` wildcards
+- Approximate syllable range, applied client-side with vowel-group estimation
 - No contractions
 - No hyphenated words
 - No proper nouns
 - No acronyms or initialisms
 - Exclude offensive words
 
-The SQL result is ordered by `quality_score DESC, word`, then converted into `WordEntry[]`.
+The SQL result is ordered by `quality_score DESC, word`, then converted into `WordEntry[]`. Pattern and syllable filters are applied after SQL conversion because they use app-level matching logic rather than database columns.
 
 ## Semantic Expansion Flow
 
@@ -306,7 +310,7 @@ sequenceDiagram
   else cache miss
     App->>DM: GET /words with mode-specific params
     DM-->>App: DatamuseWord[]
-    App->>Filter: normalize, infer POS, apply filters
+    App->>Filter: normalize, infer POS, apply filters including pattern and syllables
     Filter-->>Cache: store deduped WordEntry[]
     Cache-->>App: WordEntry[]
   end
@@ -522,6 +526,7 @@ sequenceDiagram
 - Strings must be strings
 - Part-of-speech values must be known
 - Dialect, semantic mode, and quality mode must be known
+- Duplicate mode must be known
 - Missing values fall back to defaults
 
 This makes older links safer to handle. Invalid or undecodable payloads are rejected as a whole, reported to the user, and not applied as partial criteria.

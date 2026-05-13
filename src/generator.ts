@@ -27,7 +27,13 @@ export function generateSets(
       cursor += 1;
       const root = familyKey(candidate.word);
       if (localUsed.has(candidate.word)) continue;
-      if (filters.uniqueWords && (globalUsed.has(candidate.word) || localRoots.has(root) || globalRoots.has(root))) {
+      if (filters.duplicateMode === "word" && globalUsed.has(candidate.word)) {
+        continue;
+      }
+      if (filters.duplicateMode === "family" && (globalUsed.has(candidate.word) || localRoots.has(root) || globalRoots.has(root))) {
+        continue;
+      }
+      if (!filters.duplicateMode && filters.uniqueWords && (globalUsed.has(candidate.word) || localRoots.has(root) || globalRoots.has(root))) {
         continue;
       }
       words.push(candidate);
