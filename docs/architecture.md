@@ -503,8 +503,14 @@ sequenceDiagram
   User->>App: Open shared URL
   App->>URL: Read criteria parameter
   App->>App: Decode and validate payload
-  App->>App: Merge with DEFAULT_FILTERS
-  App->>App: Set filters and generator view
+  alt Valid payload
+    App->>App: Merge with DEFAULT_FILTERS
+    App->>App: Set filters and generator view
+    App->>App: Show imported criteria summary
+  else Invalid payload
+    App->>App: Leave existing/default criteria in place
+    App->>App: Show malformed-link warning
+  end
 ```
 
 ### Share Payload Validation
@@ -518,7 +524,7 @@ sequenceDiagram
 - Dialect, semantic mode, and quality mode must be known
 - Missing values fall back to defaults
 
-This makes older links and malformed links safer to handle.
+This makes older links safer to handle. Invalid or undecodable payloads are rejected as a whole, reported to the user, and not applied as partial criteria.
 
 ## Export Flow
 

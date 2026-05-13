@@ -260,6 +260,8 @@ Click **Copy link** to create a shareable URL for the current criteria.
 
 The link stores generator criteria in the URL. It does not store the generated word results themselves.
 
+When clipboard access is available, the app copies the criteria link and shows a confirmation notice. If the browser blocks clipboard access, the app still places the criteria link in the address bar and tells you to copy it from there.
+
 Shared links include settings such as:
 
 - Word count and set count
@@ -273,7 +275,9 @@ Shared links include settings such as:
 - Theme and semantic settings
 - Seed mode and seed
 
-Opening a shared link loads those criteria into the generator and shows a short confirmation notice.
+Opening a shared link loads those criteria into the generator and shows a short confirmation notice summarizing the imported set count, words per set, theme, semantic mode, and quality mode when applicable.
+
+If a shared link is incomplete or malformed, the app leaves the existing/default criteria in place and shows a warning instead of silently applying partial data.
 
 ## Exporting Results
 

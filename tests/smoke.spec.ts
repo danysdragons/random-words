@@ -277,6 +277,7 @@ test("round-trips criteria through a share URL", async ({ page }) => {
   await page.getByRole("button", { name: "More surprising" }).click();
   await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page).toHaveURL(/criteria=/);
+  await expect(page.getByText(/criteria link/i)).toBeVisible();
   const sharedUrl = page.url();
 
   await page.evaluate(() => localStorage.clear());
@@ -285,5 +286,11 @@ test("round-trips criteria through a share URL", async ({ page }) => {
   await expect(page.getByPlaceholder("e.g. sunken city, cozy village")).toHaveValue("clockwork city");
   await expect(page.getByRole("button", { name: "Evocative" })).toHaveClass(/active/);
   await expect(page.getByRole("button", { name: "More surprising" })).toHaveClass(/active/);
-  await expect(page.getByText("Loaded shared criteria")).toBeVisible();
+  await expect(page.getByText(/Loaded shared criteria: 3 sets, 12 words each, theme "clockwork city", Evocative, More surprising/)).toBeVisible();
+});
+
+test("reports malformed shared criteria links", async ({ page }) => {
+  await page.goto("/?criteria=not-valid-base64");
+  await expect(page.getByText("Could not load shared criteria")).toBeVisible();
+  await expect(page.getByPlaceholder("e.g. sunken city, cozy village")).toHaveValue("");
 });

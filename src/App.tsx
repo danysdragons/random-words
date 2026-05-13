@@ -202,11 +202,16 @@ function App() {
   }, [activeUiTheme]);
 
   useEffect(() => {
-    const sharedFilters = readSharedFiltersFromUrl();
-    if (!sharedFilters) return;
-    setFilters(sharedFilters);
+    const sharedCriteria = readSharedCriteriaFromUrl();
+    if (sharedCriteria.status === "none") return;
+    if (sharedCriteria.status === "invalid") {
+      setView("generator");
+      setToast("Could not load shared criteria. The link may be incomplete or malformed.");
+      return;
+    }
+    setFilters(sharedCriteria.filters);
     setView("generator");
-    setToast("Loaded shared criteria");
+    setToast(`Loaded shared criteria${sharedCriteria.summary ? `: ${sharedCriteria.summary}` : ""}`);
   }, [setFilters, setView]);
 
   useEffect(() => {
@@ -354,10 +359,11 @@ function App() {
     const href = createShareUrl(filters);
     window.history.replaceState(null, "", href);
     try {
-      await navigator.clipboard?.writeText(href);
-      setToast("Copied share link");
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(href);
+      setToast("Copied criteria link to clipboard");
     } catch {
-      setToast("Share link added to the address bar");
+      setToast("Criteria link added to the address bar. Copy it from there.");
     }
   }
 
@@ -2021,14 +2027,21 @@ function createShareUrl(filters: Filters) {
   return url.href;
 }
 
-function readSharedFiltersFromUrl() {
+type SharedCriteriaResult =
+  | { status: "none" }
+  | { status: "invalid" }
+  | { status: "loaded"; filters: Filters; summary: string };
+
+function readSharedCriteriaFromUrl(): SharedCriteriaResult {
   const encoded = new URL(window.location.href).searchParams.get("criteria");
-  if (!encoded) return null;
+  if (!encoded) return { status: "none" };
   try {
     const payload = JSON.parse(decodeSharePayload(encoded)) as unknown;
-    return normalizeSharedFilters(payload);
+    const filters = normalizeSharedFilters(payload);
+    if (!filters) return { status: "invalid" };
+    return { status: "loaded", filters, summary: summarizeSharedCriteria(filters) };
   } catch {
-    return null;
+    return { status: "invalid" };
   }
 }
 
@@ -2077,6 +2090,17 @@ function normalizeSharedFilters(payload: unknown): Filters | null {
     useSeededGeneration: booleanValue(payload.useSeededGeneration, DEFAULT_FILTERS.useSeededGeneration),
     seed: stringValue(payload.seed) || DEFAULT_FILTERS.seed,
   };
+}
+
+function summarizeSharedCriteria(filters: Filters) {
+  const parts = [
+    `${filters.setCount} set${filters.setCount === 1 ? "" : "s"}`,
+    `${filters.wordsPerSet} word${filters.wordsPerSet === 1 ? "" : "s"} each`,
+  ];
+  if (filters.theme.trim()) parts.push(`theme "${filters.theme.trim()}"`);
+  if (filters.semanticMode !== DEFAULT_FILTERS.semanticMode) parts.push(MODE_LABELS[filters.semanticMode]);
+  if (filters.qualityMode !== DEFAULT_FILTERS.qualityMode) parts.push(QUALITY_LABELS[filters.qualityMode]);
+  return parts.join(", ");
 }
 
 function exportCriteria(filters: Filters): Filters {
