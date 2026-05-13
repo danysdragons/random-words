@@ -2,7 +2,7 @@
 
 Random Words is a browser-based generator for creating sets of English words and optional phrases. It is designed for writers, game masters, puzzle makers, naming work, brainstorming, worldbuilding, and any workflow where you need controlled randomness rather than a single unfiltered word list.
 
-The app runs as a static site. The main word database is loaded in your browser from a prebuilt SQLite artifact, while optional theme expansion uses Datamuse lookups that are cached locally.
+The app runs as a static site. The main word database is loaded in your browser from a prebuilt compressed SQLite artifact, with a raw SQLite fallback for hosting compatibility, while optional theme expansion uses Datamuse lookups that are cached locally.
 
 ## Quick Start
 
@@ -22,7 +22,7 @@ The generator screen has three main areas:
 - **Generated word sets:** shows generated sets, actions, pool size, seed mode, quality mode, and export controls.
 - **Theme & Semantics panel:** controls optional theme-based generation using presets or free text.
 
-The top navigation also includes **Saved Sets**, **Collections**, and **About Data**.
+The top navigation also includes **Saved Sets**, **Collections**, **Diagnostics**, **Manual**, and **About Data**.
 
 ## Generating Words
 
@@ -364,7 +364,7 @@ Deleting a collection does not delete the saved sets inside it. Those sets becom
 
 ## History
 
-The **Generation history** panel records recent generated outputs in the current browser session storage.
+The **Generation history** panel records recent generated outputs in browser local storage.
 
 Click a history item to restore its criteria and generated sets.
 
@@ -409,7 +409,7 @@ These actions affect local browser data only.
 
 The **About Data** view summarizes the word database and runtime data behavior.
 
-The primary word database is built from SCOWL/ESDB and normalized into a SQLite artifact. The app uses this database locally in the browser through `sql.js`.
+The primary word database is built from SCOWL/ESDB and normalized into a SQLite artifact. The deployed app prefers the compressed `words.sqlite.gz` artifact to reduce download size, then decompresses it in the browser and queries it locally through `sql.js`. If the compressed artifact cannot be loaded, the app can fall back to the raw SQLite file.
 
 Semantic expansion and definitions use Datamuse at runtime. These lookups are cached in browser local storage.
 
@@ -429,6 +429,8 @@ The app stores several kinds of data locally in your browser:
 This data remains on your device unless you clear it through the app settings or browser storage controls.
 
 Theme lookups and definition lookups are sent to Datamuse when those features are used.
+
+The app also tolerates older locally saved criteria when new filter fields are added. Missing fields fall back to current defaults rather than preventing the database from loading or generation from running.
 
 ## Troubleshooting
 

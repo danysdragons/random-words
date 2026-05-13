@@ -653,7 +653,7 @@ function App() {
               {filters.useSeededGeneration && (
                 <label>
                   <span>Seed</span>
-                  <input value={filters.seed} onChange={(event) => updateFilter("seed", event.target.value)} />
+                  <input aria-label="Seed value" value={filters.seed} onChange={(event) => updateFilter("seed", event.target.value)} />
                   <button className="icon" onClick={randomizeSeed} aria-label="Generate seed">
                     <RotateCcw size={15} />
                   </button>

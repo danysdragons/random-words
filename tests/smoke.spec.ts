@@ -121,6 +121,23 @@ test("prefers the compressed SQLite artifact", async ({ page }) => {
   expect(rawRequests).toBe(0);
 });
 
+test("falls back to raw SQLite when the compressed artifact is unavailable", async ({ page }) => {
+  let rawRequests = 0;
+  await page.route("**/data/words.sqlite.gz", async (route) => {
+    await route.fulfill({ status: 404, body: "missing compressed database" });
+  });
+  await page.route("**/data/words.sqlite", async (route) => {
+    rawRequests += 1;
+    await route.continue();
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  await expect(page.locator(".word-tile")).toHaveCount(36);
+  expect(rawRequests).toBeGreaterThan(0);
+});
+
 test("normalizes older persisted filter state", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -142,6 +159,23 @@ test("normalizes older persisted filter state", async ({ page }) => {
   await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Generate", exact: true }).click();
   await expect(page.locator(".word-tile")).toHaveCount(2);
+});
+
+test("keeps seeds hidden by default and deterministic when enabled", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("170,575 normalized entries")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Randomness")).toContainText("Fresh each click");
+  await expect(page.getByLabel("Seed value")).toBeHidden();
+
+  await page.getByRole("switch", { name: "Reproducible seed mode" }).click();
+  await expect(page.getByText("Randomness")).toContainText("Seeded");
+  await page.getByLabel("Seed value").fill("123456");
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  const firstWords = await page.locator(".word-tile > strong").allTextContents();
+
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  await expect(page.locator(".word-tile")).toHaveCount(36);
+  await expect.poll(async () => page.locator(".word-tile > strong").allTextContents()).toEqual(firstWords);
 });
 
 test("can select and persist a UI theme", async ({ page }) => {
