@@ -178,6 +178,7 @@ test("shows semantic pool provenance for themed generation", async ({ page }) =>
   await expect(page.locator(".metric").filter({ hasText: "Semantic matches" })).toContainText("3");
   await expect(page.locator(".metric").filter({ hasText: "Local semantic data" })).toContainText(/local/);
   await expect(page.locator(".metric").filter({ hasText: "Themed output" })).toBeVisible();
+  await expect(page.locator(".definition-tooltip").first()).toContainText("No definition");
 });
 
 test("keeps primary workflows usable on a narrow viewport", async ({ page }) => {
@@ -209,8 +210,12 @@ test("uses alternate POS entries when filtering generated words", async ({ page 
   await page.getByRole("button", { name: "Generate", exact: true }).click();
 
   await expect(page.locator(".word-tile")).toHaveCount(1);
-  await expect(page.locator(".word-tile strong")).toHaveText("painting");
+  await expect(page.getByText("Generated output is smaller than requested")).toBeVisible();
+  await expect(page.locator(".word-tile > strong")).toHaveText("painting");
   await expect(page.locator(".word-tile .pos")).toHaveText("V");
+
+  await page.getByRole("button", { name: "Diagnostics" }).click();
+  await expect(page.getByLabel("Diagnostics warnings")).toContainText("Generated output is smaller than requested");
 });
 
 test("classifies common inflected verb forms as verbs", async () => {

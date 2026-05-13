@@ -431,10 +431,10 @@ sequenceDiagram
   App->>DM: Fetch missing definitions, up to 80 words
   DM-->>App: defs payload
   App->>Cache: Store resolved or empty definitions
-  App-->>Sets: Render tooltip text where available
+  App-->>Sets: Render definition tooltip or no-definition fallback
 ```
 
-Definition requests use Datamuse with `sp`, `qe=sp`, and `md=d`. Results are cached under `random-words:definition-cache:v1`.
+Definition requests use Datamuse with `sp`, `qe=sp`, and `md=d`. Results are cached under `random-words:definition-cache:v1`. Empty definition results are cached too, so the tile tooltip can consistently show a no-definition fallback plus word provenance instead of appearing broken or missing.
 
 ## Persistence Model
 
@@ -667,6 +667,9 @@ Current smoke coverage includes:
 - Acronym filter visibility
 - Semantic mode visibility
 - Share URL round trip
+- Diagnostics export
+- Generation warnings
+- Definition fallback tooltips
 
 Build verification is handled by `npm run build`, which performs preprocessing, WASM copying, TypeScript compilation, and Vite bundling.
 
@@ -681,12 +684,14 @@ Important failure cases:
 - `words.sqlite` cannot be loaded
 - Datamuse semantic request fails
 - Generation yields smaller sets because filters are too narrow
+- Theme criteria produce no semantic matches or mostly fallback output
 - Clipboard access is denied
 
 The current behavior is pragmatic:
 
 - Database load errors appear in the status area
 - Generation errors appear in the status area
+- Generation warnings appear in the generator and Diagnostics view
 - Clipboard failures produce a toast-like notice
 - Share-link clipboard failures still update the browser address bar
 

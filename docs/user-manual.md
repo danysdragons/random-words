@@ -231,9 +231,9 @@ Word tiles show:
 
 - The word.
 - A short part-of-speech badge.
-- A definition tooltip when a definition is available.
+- A tooltip with a definition when available, or a clear no-definition fallback with metadata.
 
-Definitions are loaded from Datamuse and cached locally in your browser. Hover or focus a word tile to view the tooltip.
+Definitions are loaded from Datamuse and cached locally in your browser. Hover or focus a word tile to view the tooltip. When Datamuse does not return a definition for the word's current part of speech, the tooltip still explains that no definition is available and shows source, frequency, POS basis, confidence, and semantic provenance.
 
 Turn on **Settings -> Show word details** to show additional data-quality metadata on each tile:
 
@@ -318,6 +318,8 @@ It includes a short criteria summary followed by each generated set.
 ## Diagnostics
 
 The **Diagnostics** view explains the currently generated output. It shows summary counts, active generation rules, quality gates, and row-level metadata for each generated word.
+
+Warnings appear in the generator and Diagnostics view when the current output looks constrained or potentially surprising, such as a very small filtered pool, smaller-than-requested generated sets, no semantic matches for a theme, or themed output that mostly used general fallback words.
 
 Use the diagnostics search box and row filter buttons to narrow the visible rows.
 

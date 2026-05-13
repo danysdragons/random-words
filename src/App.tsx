@@ -481,6 +481,10 @@ function App() {
       generatedSemanticWords,
     };
   }, [basePool, semanticPool, sets]);
+  const generationWarnings = useMemo(
+    () => getGenerationWarnings(filters, sets, basePool.length, semanticStats),
+    [filters, sets, basePool.length, semanticStats],
+  );
 
   const collectionCounts = useMemo(() => {
     const counts = new Map<string | null, number>();
@@ -628,6 +632,14 @@ function App() {
               )}
             </div>
 
+            {generationWarnings.length > 0 && (
+              <div className="warning-list" role="status" aria-label="Generation warnings">
+                {generationWarnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
+            )}
+
             {(status || toast) && <div className="notice" role="status">{toast || status}</div>}
 
             <div className="sets">
@@ -706,6 +718,7 @@ function App() {
               filters={filters}
               basePoolSize={basePool.length}
               semanticStats={semanticStats}
+              warnings={generationWarnings}
               exportDiagnostics={(rows, format, context) => {
                 const blob = new Blob([serializeDiagnostics(rows, format, filters, semanticStats, context)], {
                   type: exportMime(format),
@@ -1035,40 +1048,40 @@ function WordSetCard({
         </div>
       </header>
       <div className="word-grid">
-        {set.words.map((entry, wordIndex) => (
-          <div
-            className="word-tile"
-            key={`${entry.word}-${wordIndex}`}
-            tabIndex={0}
-            title={definitions[entry.word] || `${entry.word} (${posShort(entry.pos)})`}
-          >
-            <span className="word-number">{wordIndex + 1}</span>
-            <strong>{entry.word}</strong>
-            <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
-            {showDetails && (
-              <span className="word-details">
-                {entry.baseForm !== entry.word && `base ${entry.baseForm} · `}
-                {(entry.alternatePos?.length ?? 0) > 0 && `also ${entry.alternatePos.map(posShort).join("/")} · `}
-                {entry.semanticScore && `semantic ${semanticStrengthLabel(entry.semanticScore)} · `}
-                {posSourceLabel(entry.posSource)} · {entry.posConfidence}%
-              </span>
-            )}
-            {definitions[entry.word] && (
+        {set.words.map((entry, wordIndex) => {
+          const definition = definitions[entry.word];
+          return (
+            <div
+              className="word-tile"
+              key={`${entry.word}-${wordIndex}`}
+              tabIndex={0}
+              title={definition || definitionFallback(entry)}
+            >
+              <span className="word-number">{wordIndex + 1}</span>
+              <strong>{entry.word}</strong>
+              <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
+              {showDetails && (
+                <span className="word-details">
+                  {entry.baseForm !== entry.word && `base ${entry.baseForm} · `}
+                  {(entry.alternatePos?.length ?? 0) > 0 && `also ${entry.alternatePos.map(posShort).join("/")} · `}
+                  {entry.semanticScore && `semantic ${semanticStrengthLabel(entry.semanticScore)} · `}
+                  {posSourceLabel(entry.posSource)} · {entry.posConfidence}%
+                </span>
+              )}
               <span className="definition-tooltip" role="tooltip">
-                <strong>{entry.frequencyBand}</strong>
-                {definitions[entry.word]}
-                {showDetails && (
-                  <span className="tooltip-meta">
-                    {entry.baseForm !== entry.word ? `Base ${entry.baseForm} · ` : ""}
-                    {(entry.alternatePos?.length ?? 0) > 0 ? `Also ${entry.alternatePos.map(posShort).join("/")} · ` : ""}
-                    {entry.semanticScore ? `Semantic ${semanticStrengthLabel(entry.semanticScore)} · ` : ""}
-                    POS {posSourceLabel(entry.posSource).toLowerCase()} · {entry.posConfidence}% confidence
-                  </span>
-                )}
+                <strong>{definition ? "Definition" : "No definition"}</strong>
+                {definition || definitionFallback(entry)}
+                <span className="tooltip-meta">
+                  {entry.frequencyBand} · {entry.source === "scowl" ? "SQLite word database" : "Datamuse result"} ·{" "}
+                  {entry.baseForm !== entry.word ? `Base ${entry.baseForm} · ` : ""}
+                  {(entry.alternatePos?.length ?? 0) > 0 ? `Also ${entry.alternatePos.map(posShort).join("/")} · ` : ""}
+                  {entry.semanticScore ? `Semantic ${semanticStrengthLabel(entry.semanticScore)} · ` : ""}
+                  POS {posSourceLabel(entry.posSource).toLowerCase()} · {entry.posConfidence}% confidence
+                </span>
               </span>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </article>
   );
@@ -1312,6 +1325,7 @@ function DiagnosticsView({
   filters,
   basePoolSize,
   semanticStats,
+  warnings,
   exportDiagnostics,
 }: {
   sets: GeneratedSet[];
@@ -1323,6 +1337,7 @@ function DiagnosticsView({
     datamuseOnly: number;
     generatedSemanticWords: number;
   };
+  warnings: string[];
   exportDiagnostics: (rows: DiagnosticRow[], format: ExportFormat, context: DiagnosticExportContext) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -1372,6 +1387,15 @@ function DiagnosticsView({
         <MetricCard label="Low POS confidence" value={lowConfidenceCount.toLocaleString()} detail="< 70% confidence" />
         <MetricCard label="Datamuse-only output" value={datamuseOnlyCount.toLocaleString()} detail="not in local SQLite" />
       </div>
+
+      {warnings.length > 0 && (
+        <div className="diagnostic-warning-panel" role="status" aria-label="Diagnostics warnings">
+          <h2>Warnings</h2>
+          {warnings.map((warning) => (
+            <p key={warning}>{warning}</p>
+          ))}
+        </div>
+      )}
 
       <div className="diagnostic-rules">
         <article>
@@ -1871,6 +1895,52 @@ function semanticStrengthLabel(score: number) {
   if (score >= 10000) return "strong";
   if (score >= 2000) return "moderate";
   return "light";
+}
+
+function definitionFallback(entry: WordEntry) {
+  return `No definition is available for ${entry.word} as ${indefiniteArticle(posLabel(entry.pos))} ${posLabel(entry.pos).toLowerCase()}.`;
+}
+
+function indefiniteArticle(value: string) {
+  return /^[aeiou]/i.test(value) ? "an" : "a";
+}
+
+function getGenerationWarnings(
+  filters: Filters,
+  sets: GeneratedSet[],
+  basePoolSize: number,
+  semanticStats: {
+    total: number;
+    localMatches: number;
+    datamuseOnly: number;
+    generatedSemanticWords: number;
+  },
+) {
+  const warnings: string[] = [];
+  const requestedWords = filters.wordsPerSet * filters.setCount;
+  const generatedWords = sets.reduce((total, set) => total + set.words.length, 0);
+
+  if (basePoolSize > 0 && basePoolSize < requestedWords * 2) {
+    warnings.push("The filtered local pool is very small for the requested output. Loosen filters or reduce set size for more variety.");
+  }
+
+  if (sets.length > 0 && generatedWords < requestedWords) {
+    warnings.push("Generated output is smaller than requested because the active filters left too few eligible words.");
+  }
+
+  if (filters.theme.trim() && semanticStats.total === 0) {
+    warnings.push("No semantic matches were available for the current theme and filters. Results may come entirely from the general pool.");
+  } else if (filters.theme.trim() && generatedWords > 0 && semanticStats.generatedSemanticWords === 0) {
+    warnings.push("The current themed output used general fallback words only. Increase theme expansion, enable phrases, or loosen filters.");
+  } else if (filters.theme.trim() && generatedWords > 0 && semanticStats.generatedSemanticWords < Math.ceil(generatedWords * 0.25)) {
+    warnings.push("Only a small share of the output came from semantic matches. Increase theme strength or use Strict category for more focused results.");
+  }
+
+  if (filters.theme.trim() && !filters.fallbackToGeneral && semanticStats.total < requestedWords) {
+    warnings.push("Fallback to the general pool is off, and the semantic pool is smaller than the requested output.");
+  }
+
+  return warnings;
 }
 
 function normalizeTheme(value: string) {
