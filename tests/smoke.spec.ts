@@ -15,6 +15,7 @@ test("loads the SQLite word database and generates sets", async ({ page }) => {
   await expect(page.locator(".metric").filter({ hasText: "Filtered pool size" })).toContainText(
     /\d{1,3}(,\d{3})*/,
   );
+  await expect(page.getByText("Version 1.0.0")).toBeVisible();
 
   const hauntedPreset = page.getByRole("button", { name: "Haunted House" });
   await hauntedPreset.click();

@@ -141,6 +141,8 @@ const DEFAULT_FILTERS: Filters = {
   seed: "728391",
 };
 
+const APP_VERSION = "1.0.0";
+
 interface DisplaySettings {
   showWordDetails: boolean;
   uiTheme: UiTheme;
@@ -795,6 +797,7 @@ function App() {
       <div className="bottom-line">
         <span>All DB words are lowercase. Filters apply to normalized forms.</span>
         <span>{generatedWordCount} generated words visible</span>
+        <span>Version {APP_VERSION}</span>
       </div>
       {activeDialog === "help" && <HelpDialog close={() => setActiveDialog(null)} />}
       {activeDialog === "settings" && (
@@ -1749,6 +1752,7 @@ function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
           <FileText size={22} />
           <h2>Deployment</h2>
           <p>The app builds static assets for GitHub Pages through GitHub Actions.</p>
+          <p>Release version: {APP_VERSION}</p>
         </article>
       </div>
     </section>

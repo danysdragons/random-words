@@ -2,6 +2,7 @@
   "name": "random-words",
   "version": "1.0.0",
   "description": "A static random word and phrase set generator backed by a generated SQLite word database.",
+  "homepage": "https://danysdragons.github.io/random-words/",
   "type": "module",
   "scripts": {
     "preprocess": "node scripts/build-db.mjs",
@@ -14,9 +15,19 @@
     "report:data": "node scripts/write-data-quality-report.mjs",
     "test:smoke": "playwright test"
   },
-  "keywords": [],
+  "keywords": [
+    "words",
+    "generator",
+    "sqlite",
+    "semantic-search",
+    "github-pages"
+  ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danysdragons/random-words.git"
+  },
   "engines": {
     "node": ">=22"
   },
