@@ -39,9 +39,10 @@ The core design choices are:
 | App shell | `src/App.tsx` | Top-level state orchestration, routing between views, generation commands, persistence wiring |
 | UI components and views | `src/components/*`, `src/views/*`, `src/styles.css` | Criteria controls, semantic theme panel, generated set cards, library views, diagnostics, dialogs, manual rendering |
 | Runtime hooks | `src/hooks/*` | Persistent browser state, resolved UI theme behavior, generated-word definition fetching |
+| Preset data | `src/themePresets.ts`, `src/useCasePresets.ts` | Theme presets for semantic expansion and use-case presets that apply broader criteria bundles |
 | Static DB loading and filtering | `src/data.ts`, `src/services/filterEvaluator.ts` | Load compressed `words.sqlite.gz` with raw SQLite fallback, load build metadata, translate broad filters into SQL queries, apply shared client-side filters |
 | Semantic and definition lookup | `src/datamuse.ts`, `src/services/filterEvaluator.ts` | Datamuse requests, semantic mode mapping, shared client-side semantic filtering, local cache |
-| Generation algorithm | `src/generator.ts` | Seeded random generation, semantic/base pool blending, quality weighting, duplicate-family reduction |
+| Generation algorithm | `src/generator.ts` | Seeded random generation, semantic/base pool blending, quality weighting, duplicate-family reduction, pinned-word preservation |
 | Runtime safety metadata | `src/services/safetyMetadata.ts`, `src/generated/safety-metadata.json` | Use generated offensive-word and acronym/initialism metadata in runtime filters |
 | Shared types | `src/types.ts` | Filter, word, saved set, collection, metadata, semantic mode, quality mode definitions |
 | DB preprocessing | `scripts/write-runtime-safety.mjs`, `scripts/build-db.mjs` | Generate compact runtime safety metadata, download wordlists, normalize entries, infer metadata, build SQLite artifact and build metadata |
@@ -219,6 +220,13 @@ flowchart TD
 
 Most user-facing state is persisted through `usePersistentState`, which writes JSON to local storage. Definition fetching is isolated in `useWordDefinitions`, and system theme resolution plus the document-level `data-ui-theme` side effect are isolated in `useResolvedUiTheme`.
 
+Generated word entries can also carry runtime-only workspace flags:
+
+- `pinned`: user requested that this word stay in place during regeneration
+- `manual`: user edited or added this word after generation
+
+These fields are not part of the SQLite source artifact. They live on generated set entries and are preserved through history, saved sets, saved-workspace imports, and exports.
+
 ### View Model
 
 The app has six top-level views:
@@ -381,10 +389,11 @@ flowchart TD
   Merge["Merge semantic entries with DB rows when words overlap"]
   Select["Select blended pool by semantic mode"]
   Safe["Client safety filter"]
+  Preserved["Pinned words from previous sets"]
   Seed["Seed string"]
   RNG["numericSeed + mulberry32"]
   Shuffle["Weighted shuffle<br/>quality mode"]
-  Pick["Pick words into sets"]
+  Pick["Fill unpinned slots"]
   Unique["Unique word and family-key filtering"]
   Sets["GeneratedSet[]"]
 
@@ -396,6 +405,7 @@ flowchart TD
   Seed --> RNG
   Safe --> Shuffle
   RNG --> Shuffle
+  Preserved --> Pick
   Shuffle --> Pick
   Pick --> Unique
   Unique --> Sets
@@ -408,6 +418,12 @@ Generation uses `numericSeed` and `mulberry32` for deterministic pseudo-randomne
 If reproducible seed mode is disabled, `prepareGenerationFilters` replaces the seed with a fresh random seed before generation. This keeps regular users from having to change seeds manually.
 
 If reproducible seed mode is enabled, the visible seed is used directly.
+
+### Workspace Preservation
+
+`WordSetCard` lets users pin, edit, remove, or append words. Edits and additions create manual `WordEntry` objects that keep the current display POS metadata where possible and mark `manual: true`.
+
+Pinned words are passed back to `generateSets` as `preservedSets`. During generation, each set starts with pinned entries in their existing positions, registers those words and root-family keys as already used, then fills only the empty slots from the weighted shuffled pool. Pins take precedence over duplicate controls because they are explicit user curation.
 
 ### Pool Blending
 
@@ -588,9 +604,9 @@ Result exports include:
 - Export timestamp
 - Criteria metadata
 - Generated sets
-- Word-level metadata where the format supports it
+- Word-level metadata where the format supports it, including pinned and manual state
 
-CSV includes columns for set, position, word, part of speech, frequency band, quality score, source, theme, semantic mode, quality mode, seed mode, and seed.
+CSV includes columns for set, position, word, part of speech, frequency band, quality score, source, semantic provenance, pinned state, manual state, theme, semantic mode, quality mode, seed mode, and seed.
 
 Diagnostics export uses the same `ExportFormat` options. It serializes the currently visible diagnostics rows after diagnostics search and row-filter controls have been applied.
 
@@ -614,7 +630,7 @@ flowchart LR
   SerializeDiagnostics --> DownloadDiagnostics
 ```
 
-Diagnostics exports include the export timestamp, row filter, search query, criteria metadata, semantic summary counts, and row-level provenance such as POS source, POS confidence, frequency band, quality score, source, semantic score, semantic strength, and semantic source.
+Diagnostics exports include the export timestamp, row filter, search query, criteria metadata, semantic summary counts, and row-level provenance such as POS source, POS confidence, frequency band, quality score, source, semantic score, semantic strength, semantic source, pinned state, and manual state.
 
 ## Saved Sets And Collections Flow
 
@@ -639,7 +655,7 @@ flowchart TD
   Assign --> SavedStorage
 ```
 
-Saved sets contain a full `GeneratedSet`, not only word strings. Collections are lightweight labels assigned by `collectionId`.
+Saved sets contain a full `GeneratedSet`, not only word strings, so pinned and manual word metadata survives saving and restoring. Collections are lightweight labels assigned by `collectionId`.
 
 Deleting a collection clears assignments to that collection but does not delete saved sets.
 

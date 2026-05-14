@@ -1,5 +1,5 @@
-import { Bookmark, Copy, Info, RefreshCw, Search, Star } from "lucide-react";
-import { useState } from "react";
+import { Bookmark, Check, Copy, Info, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Star, Trash2, X } from "lucide-react";
+import { type FormEvent, useState } from "react";
 import {
   DIALECT_LABELS,
   DUPLICATE_LABELS,
@@ -19,6 +19,7 @@ import type {
   SemanticMode,
   WordEntry,
 } from "../types";
+import { USE_CASE_PRESETS, type UseCasePreset } from "../useCasePresets";
 import {
   definitionFallback,
   normalizeTheme,
@@ -32,12 +33,23 @@ import { NumberControl, TextFilter, Toggle } from "./controls";
 export function CriteriaPanel({
   filters,
   updateFilter,
+  applyFilters,
   reset,
 }: {
   filters: Filters;
   updateFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
+  applyFilters: (patch: Partial<Filters>) => void;
   reset: () => void;
 }) {
+  function useCaseSelected(preset: UseCasePreset) {
+    return Object.entries(preset.filters).every(([key, value]) => {
+      const currentValue = filters[key as keyof Filters];
+      return Array.isArray(value)
+        ? Array.isArray(currentValue) && value.join("|") === currentValue.join("|")
+        : currentValue === value;
+    });
+  }
+
   return (
     <aside className="criteria panel">
       <div className="panel-title">
@@ -45,6 +57,30 @@ export function CriteriaPanel({
         <button className="link" onClick={reset}>
           Reset
         </button>
+      </div>
+
+      <div className="field">
+        <label>Use-case presets</label>
+        <div className="use-case-grid">
+          {USE_CASE_PRESETS.map((preset) => {
+            const selected = useCaseSelected(preset);
+            return (
+              <button
+                key={preset.id}
+                className={selected ? "selected" : ""}
+                aria-pressed={selected}
+                aria-label={`Apply use-case preset: ${preset.label}`}
+                onClick={() => applyFilters(preset.filters)}
+              >
+                <span>
+                  {selected && <Star size={13} />}
+                  {preset.label}
+                </span>
+                <small>{preset.intent}</small>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <NumberControl
@@ -367,18 +403,50 @@ export function WordSetCard({
   index,
   definitions,
   showDetails,
+  showInlineDefinitions,
   onCopy,
   onSave,
   onRegenerate,
+  onTogglePin,
+  onEditWord,
+  onRemoveWord,
+  onAddWord,
 }: {
   set: GeneratedSet;
   index: number;
   definitions: Record<string, string>;
   showDetails: boolean;
+  showInlineDefinitions: boolean;
   onCopy: (words: WordEntry[]) => void;
   onSave: () => void;
   onRegenerate: () => void;
+  onTogglePin: (wordIndex: number) => void;
+  onEditWord: (wordIndex: number, word: string) => void;
+  onRemoveWord: (wordIndex: number) => void;
+  onAddWord: (word: string) => void;
 }) {
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [newWord, setNewWord] = useState("");
+
+  function startEditing(wordIndex: number, word: string) {
+    setEditingIndex(wordIndex);
+    setEditValue(word);
+  }
+
+  function submitEdit(event: FormEvent, wordIndex: number) {
+    event.preventDefault();
+    onEditWord(wordIndex, editValue);
+    setEditingIndex(null);
+    setEditValue("");
+  }
+
+  function submitNewWord(event: FormEvent) {
+    event.preventDefault();
+    onAddWord(newWord);
+    setNewWord("");
+  }
+
   return (
     <article className="set-card">
       <header>
@@ -404,16 +472,73 @@ export function WordSetCard({
       <div className="word-grid">
         {set.words.map((entry, wordIndex) => {
           const definition = definitions[entry.word];
+          const isEditing = editingIndex === wordIndex;
           return (
             <div
-              className="word-tile"
+              className={`word-tile${entry.pinned ? " pinned" : ""}${entry.manual ? " manual" : ""}`}
               key={`${entry.word}-${wordIndex}`}
               tabIndex={0}
               title={definition || definitionFallback(entry)}
             >
               <span className="word-number">{wordIndex + 1}</span>
-              <strong>{entry.word}</strong>
+              <div className="word-workspace-actions">
+                <button
+                  className="icon"
+                  onClick={() => onTogglePin(wordIndex)}
+                  aria-label={`${entry.pinned ? "Unpin" : "Pin"} ${entry.word}`}
+                  title={entry.pinned ? "Unpin word" : "Pin word"}
+                >
+                  {entry.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+                </button>
+                <button
+                  className="icon"
+                  onClick={() => startEditing(wordIndex, entry.word)}
+                  aria-label={`Edit ${entry.word}`}
+                  title="Edit word"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  className="icon"
+                  onClick={() => onRemoveWord(wordIndex)}
+                  aria-label={`Remove ${entry.word}`}
+                  title="Remove word"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              {isEditing ? (
+                <form className="word-edit-form" onSubmit={(event) => submitEdit(event, wordIndex)}>
+                  <input
+                    aria-label={`Edited word ${wordIndex + 1}`}
+                    autoFocus
+                    value={editValue}
+                    onChange={(event) => setEditValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setEditingIndex(null);
+                        setEditValue("");
+                      }
+                    }}
+                  />
+                  <button className="icon" type="submit" aria-label="Save edited word">
+                    <Check size={14} />
+                  </button>
+                  <button className="icon" type="button" aria-label="Cancel edit" onClick={() => setEditingIndex(null)}>
+                    <X size={14} />
+                  </button>
+                </form>
+              ) : (
+                <strong>{entry.word}</strong>
+              )}
               <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
+              {(entry.pinned || entry.manual) && (
+                <span className="word-flags">
+                  {entry.pinned && "Pinned"}
+                  {entry.pinned && entry.manual && " · "}
+                  {entry.manual && "Manual"}
+                </span>
+              )}
               {showDetails && (
                 <span className="word-details">
                   {entry.baseForm !== entry.word && `base ${entry.baseForm} · `}
@@ -422,6 +547,7 @@ export function WordSetCard({
                   {posSourceLabel(entry.posSource)} · {entry.posConfidence}%
                 </span>
               )}
+              {showInlineDefinitions && definition && <span className="inline-definition">{definition}</span>}
               <span className="definition-tooltip" role="tooltip">
                 <strong>{definition ? "Definition" : "No definition"}</strong>
                 {definition || definitionFallback(entry)}
@@ -437,6 +563,18 @@ export function WordSetCard({
           );
         })}
       </div>
+      <form className="add-word-form" onSubmit={submitNewWord}>
+        <input
+          aria-label={`Add word to Set ${index + 1}`}
+          value={newWord}
+          onChange={(event) => setNewWord(event.target.value)}
+          placeholder="Add a word or phrase"
+        />
+        <button type="submit">
+          <Plus size={16} />
+          Add word
+        </button>
+      </form>
     </article>
   );
 }

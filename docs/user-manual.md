@@ -7,7 +7,7 @@ The app runs as a static site. The main word database is loaded in your browser 
 ## Quick Start
 
 1. Open the app.
-2. Adjust the criteria in the left panel.
+2. Adjust the criteria in the left panel, or choose a use-case preset.
 3. Optionally enter a theme or choose a preset in the right panel.
 4. Click **Generate**.
 5. Copy, save, export, or share the generated results.
@@ -33,6 +33,21 @@ Click **Shuffle** to generate again with a fresh random seed. This is useful whe
 Click **Clear** to remove the currently visible generated sets. This does not remove saved sets or collections.
 
 ## Criteria
+
+### Use-Case Presets
+
+Use-case presets apply several criteria at once. They are intended as practical starting points for common workflows rather than permanent modes. After selecting one, you can still change any individual control.
+
+Available presets include:
+
+- **Writing Sparks:** balanced nouns, verbs, and adjectives for scenes, prompts, and exercises.
+- **Naming:** shorter nouns and adjectives for projects, products, places, and fictional names.
+- **Poetry:** image-heavy words with broader POS coverage and more surprising weighting.
+- **Classroom:** common, clean vocabulary with conservative defaults.
+- **Game Prompts:** action-oriented words and phrases for tabletop prompts and improvisation.
+- **Memorable:** short common words suited to mnemonic lists and password-like phrases.
+
+The selected preset is highlighted when the current criteria still match its settings.
 
 ### Word Count Per Set
 
@@ -259,7 +274,19 @@ Each set has several actions:
 
 - **Copy:** copies that set's words as comma-separated text.
 - **Save:** saves that set to local storage.
-- **Regenerate:** regenerates only that set using the current criteria.
+- **Regenerate:** regenerates only that set using the current criteria, while keeping pinned words in place.
+
+### Word Workspace Actions
+
+Each word tile includes small workspace controls:
+
+- **Pin:** keeps the word in its current position when you generate again or regenerate that set.
+- **Edit:** replaces the word text with your own value. Edited words are marked as manual.
+- **Remove:** deletes the word from the visible set.
+
+Use **Add word** below a set to append your own word or phrase. Manual words are included when you copy, save, or export the set.
+
+Pinned and manual labels are preserved in saved sets, history, JSON exports, CSV exports, and saved-workspace imports.
 
 ### Save All
 
@@ -320,11 +347,15 @@ CSV export is best for spreadsheets.
 
 Rows include metadata such as set number, word position, part of speech, frequency band, quality score, source, theme, semantic mode, quality mode, seed mode, and seed.
 
+CSV rows also include whether a word was pinned or manually edited/added.
+
 ### Text Export
 
 Text export is best for notes, documents, prompts, and quick sharing.
 
 It includes a short criteria summary followed by each generated set.
+
+Pinned and manual words are labeled inline in text exports.
 
 ## Diagnostics
 
@@ -334,7 +365,7 @@ Warnings appear in the generator and Diagnostics view when the current output lo
 
 Use the diagnostics search box and row filter buttons to narrow the visible rows.
 
-Click **Export diagnostics** to download the currently visible diagnostics rows. Diagnostics export supports JSON, CSV, and text formats. The export includes the active diagnostics row filter, search query, criteria metadata, semantic summary counts, and row-level word metadata such as POS source, confidence, frequency band, quality score, source, and semantic strength.
+Click **Export diagnostics** to download the currently visible diagnostics rows. Diagnostics export supports JSON, CSV, and text formats. The export includes the active diagnostics row filter, search query, criteria metadata, semantic summary counts, and row-level word metadata such as POS source, confidence, frequency band, quality score, source, semantic strength, pinned state, and manual state.
 
 ## Saved Sets
 
@@ -395,6 +426,8 @@ The selected UI theme is saved locally in the browser. When **System** is select
 
 Enable **Show word details** when you want generated word tiles to show metadata such as base form, POS source, confidence, and semantic source.
 
+Enable **Show inline definitions** when you want available definitions to appear directly inside word tiles instead of only in hover/focus tooltips.
+
 ### Data Actions
 
 Available actions:
@@ -422,7 +455,7 @@ The app stores several kinds of data locally in your browser:
 - Saved sets
 - Collections
 - Generation history
-- Display settings, including UI theme and word detail display preference
+- Display settings, including UI theme, word detail display preference, and inline definition preference
 - Datamuse semantic cache
 - Definition cache
 
@@ -526,3 +559,12 @@ Some browsers block clipboard access unless the page has permission or the actio
 3. Generate sets.
 4. Export as JSON or CSV.
 5. Use **Copy link** to preserve the criteria for later.
+
+### Curating A Final Set
+
+1. Generate several sets.
+2. Pin the strongest words.
+3. Regenerate the set to replace weaker unpinned words.
+4. Edit any almost-right words directly.
+5. Add your own final words or phrases.
+6. Save or export the curated set.

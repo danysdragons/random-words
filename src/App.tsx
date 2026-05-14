@@ -128,7 +128,9 @@ function App() {
     try {
       const semanticLookup = await fetchSemanticWords(nextFilters);
       const semanticWords = semanticLookup.words;
-      const generated = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters);
+      const generated = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters, {
+        preservedSets: sets,
+      });
       setSemanticPool(semanticWords);
       setSets(generated);
       setHistory((current) =>
@@ -168,7 +170,9 @@ function App() {
     try {
       const semanticLookup = await fetchSemanticWords(nextFilters);
       const semanticWords = semanticLookup.words;
-      const [replacement] = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters);
+      const [replacement] = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters, {
+        preservedSets: [sets[targetIndex]],
+      });
       if (!replacement) return;
       setSemanticPool(semanticWords);
       setSets((current) => current.map((set, index) => (index === targetIndex ? replacement : set)));
@@ -183,6 +187,10 @@ function App() {
 
   function updateFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyFilters(patch: Partial<Filters>) {
+    setFilters((current) => ({ ...current, ...patch }));
   }
 
   function getLocalPool(db: WordDatabase, nextFilters: Filters) {
@@ -258,6 +266,66 @@ function App() {
 
   function saveAllSets() {
     sets.forEach((set, index) => saveSet(set, index));
+  }
+
+  function togglePinnedWord(setIndex: number, wordIndex: number) {
+    setSets((current) =>
+      current.map((set, currentSetIndex) =>
+        currentSetIndex === setIndex
+          ? {
+              ...set,
+              words: set.words.map((entry, currentWordIndex) =>
+                currentWordIndex === wordIndex ? { ...entry, pinned: !entry.pinned } : entry,
+              ),
+            }
+          : set,
+      ),
+    );
+  }
+
+  function editWord(setIndex: number, wordIndex: number, word: string) {
+    const trimmed = word.trim();
+    if (!trimmed) return;
+    setSets((current) =>
+      current.map((set, currentSetIndex) =>
+        currentSetIndex === setIndex
+          ? {
+              ...set,
+              words: set.words.map((entry, currentWordIndex) =>
+                currentWordIndex === wordIndex ? manualWordEntry(trimmed, entry) : entry,
+              ),
+            }
+          : set,
+      ),
+    );
+  }
+
+  function removeWord(setIndex: number, wordIndex: number) {
+    setSets((current) =>
+      current.map((set, currentSetIndex) =>
+        currentSetIndex === setIndex
+          ? {
+              ...set,
+              words: set.words.filter((_, currentWordIndex) => currentWordIndex !== wordIndex),
+            }
+          : set,
+      ),
+    );
+  }
+
+  function addWord(setIndex: number, word: string) {
+    const trimmed = word.trim();
+    if (!trimmed) return;
+    setSets((current) =>
+      current.map((set, currentSetIndex) =>
+        currentSetIndex === setIndex
+          ? {
+              ...set,
+              words: [...set.words, manualWordEntry(trimmed)],
+            }
+          : set,
+      ),
+    );
   }
 
   function removeSavedSet(id: string) {
@@ -401,7 +469,12 @@ function App() {
 
       {view === "generator" ? (
         <main className="workspace">
-          <CriteriaPanel filters={filters} updateFilter={updateFilter} reset={() => setFilters(DEFAULT_FILTERS)} />
+          <CriteriaPanel
+            filters={filters}
+            updateFilter={updateFilter}
+            applyFilters={applyFilters}
+            reset={() => setFilters(DEFAULT_FILTERS)}
+          />
 
           <section className="main-panel">
             <div className="section-head">
@@ -522,9 +595,14 @@ function App() {
                     index={index}
                     definitions={definitions}
                     showDetails={displaySettings.showWordDetails}
+                    showInlineDefinitions={displaySettings.showInlineDefinitions}
                     onCopy={(words) => void copyWords(words, setToast)}
                     onSave={() => saveSet(set, index)}
                     onRegenerate={() => void handleRegenerateSet(index)}
+                    onTogglePin={(wordIndex) => togglePinnedWord(index, wordIndex)}
+                    onEditWord={(wordIndex, word) => editWord(index, wordIndex, word)}
+                    onRemoveWord={(wordIndex) => removeWord(index, wordIndex)}
+                    onAddWord={(word) => addWord(index, word)}
                   />
                 ))
               )}
@@ -619,6 +697,31 @@ function App() {
       )}
     </div>
   );
+}
+
+function manualWordEntry(word: string, previous?: WordEntry): WordEntry {
+  const normalized = word.trim().toLowerCase().replace(/\s+/g, " ");
+  const length = normalized.replace(/[^a-z]/g, "").length || normalized.length;
+  return {
+    id: previous?.manual ? previous.id : -Date.now(),
+    word: normalized,
+    length,
+    pos: previous?.pos ?? "noun",
+    alternatePos: previous?.alternatePos ?? [],
+    baseForm: normalized,
+    posSource: previous?.posSource ?? "default",
+    posConfidence: previous?.posConfidence ?? 40,
+    commonness: previous?.commonness ?? "common",
+    source: previous?.source ?? "scowl",
+    score: previous?.score ?? 1,
+    qualityScore: previous?.qualityScore ?? 1,
+    semanticScore: previous?.semanticScore,
+    semanticSource: previous?.semanticSource,
+    frequencyBand: previous?.frequencyBand ?? "manual",
+    isPhrase: /\s/.test(normalized),
+    pinned: previous?.pinned,
+    manual: true,
+  };
 }
 
 export default App;

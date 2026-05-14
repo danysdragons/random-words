@@ -22,7 +22,11 @@ export function HelpDialog({ close }: { close: () => void }) {
       </div>
       <div className="dialog-section">
         <h3>Definitions</h3>
-        <p>Hover or focus a generated word tile to see a short definition when one is available. Definitions are cached locally in this browser.</p>
+        <p>Hover or focus a generated word tile to see a short definition when one is available. Turn on inline definitions in Settings when you want definitions visible in the word grid. Definitions are cached locally in this browser.</p>
+      </div>
+      <div className="dialog-section">
+        <h3>Workspace</h3>
+        <p>Pin useful words before regenerating, edit weak words directly, or add your own words to a set before saving or exporting it.</p>
       </div>
     </Modal>
   );
@@ -74,6 +78,12 @@ export function SettingsDialog({
           onChange={(checked) => updateDisplaySettings({ ...displaySettings, showWordDetails: checked })}
         />
         <p className="muted">Adds base form, POS source, and confidence to generated word tiles.</p>
+        <Toggle
+          label="Show inline definitions"
+          checked={displaySettings.showInlineDefinitions}
+          onChange={(checked) => updateDisplaySettings({ ...displaySettings, showInlineDefinitions: checked })}
+        />
+        <p className="muted">Shows cached definitions directly under each word when available.</p>
       </div>
       <div className="settings-actions">
         <button onClick={resetFilters}>Reset generator defaults</button>

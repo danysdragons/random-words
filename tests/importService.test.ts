@@ -17,6 +17,8 @@ const entry: WordEntry = {
   qualityScore: 90,
   frequencyBand: "core",
   isPhrase: false,
+  pinned: true,
+  manual: true,
 };
 
 const collection: Collection = {
@@ -54,6 +56,8 @@ describe("importService", () => {
             length: 99,
             baseForm: "lagoon",
             alternatePos: ["verb"],
+            pinned: true,
+            manual: true,
           },
         ],
       },

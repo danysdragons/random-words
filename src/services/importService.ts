@@ -105,6 +105,8 @@ function normalizeImportedWordEntry(value: unknown): WordEntry | null {
     semanticSource: value.semanticSource === "datamuse" ? "datamuse" : value.semanticSource === "local" ? "local" : undefined,
     frequencyBand: stringValue(value.frequencyBand).trim() || "imported",
     isPhrase: Boolean(value.isPhrase),
+    pinned: Boolean(value.pinned),
+    manual: Boolean(value.manual),
   };
 }
 

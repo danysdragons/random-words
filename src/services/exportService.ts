@@ -8,7 +8,7 @@ export function serializeSets(sets: GeneratedSet[], format: ExportFormat, filter
   if (format === "json") return JSON.stringify({ exportedAt, criteria, sets }, null, 2);
   if (format === "csv") {
     return [
-      "exported_at,set,position,word,part_of_speech,alternate_pos,frequency_band,quality_score,source,semantic_score,semantic_source,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
+      "exported_at,set,position,word,part_of_speech,alternate_pos,frequency_band,quality_score,source,semantic_score,semantic_source,pinned,manual,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
       ...sets.flatMap((set, setIndex) =>
         set.words.map((entry, wordIndex) =>
           [
@@ -23,6 +23,8 @@ export function serializeSets(sets: GeneratedSet[], format: ExportFormat, filter
             entry.source,
             entry.semanticScore ?? "",
             entry.semanticSource ?? "",
+            entry.pinned ? "yes" : "no",
+            entry.manual ? "yes" : "no",
             set.theme,
             criteria.theme,
             criteria.semanticMode,
@@ -51,7 +53,7 @@ export function serializeSets(sets: GeneratedSet[], format: ExportFormat, filter
     `Dialect: ${criteria.dialect}`,
   ].join("\n");
   return `${criteriaLines}\n\n${sets
-    .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => entry.word).join(", ")}`)
+    .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => `${entry.word}${entry.pinned ? " [pinned]" : ""}${entry.manual ? " [manual]" : ""}`).join(", ")}`)
     .join("\n\n")}`;
 }
 
@@ -91,7 +93,7 @@ export function serializeDiagnostics(
 
   if (format === "csv") {
     return [
-      "exported_at,row_filter,query,set,position,word,base_form,part_of_speech,alternate_pos,pos_source,pos_confidence,frequency_band,quality_score,source,semantic_score,semantic_strength,semantic_source",
+      "exported_at,row_filter,query,set,position,word,base_form,part_of_speech,alternate_pos,pos_source,pos_confidence,frequency_band,quality_score,source,semantic_score,semantic_strength,semantic_source,pinned,manual",
       ...diagnostics.map((row) =>
         [
           exportedAt,
@@ -111,6 +113,8 @@ export function serializeDiagnostics(
           row.semanticScore ?? "",
           row.semanticStrength,
           row.semanticSource ?? "",
+          row.pinned ? "yes" : "no",
+          row.manual ? "yes" : "no",
         ]
           .map(csvEscape)
           .join(","),
@@ -166,6 +170,8 @@ function diagnosticRowToRecord(entry: WordEntry, setIndex: number, wordIndex: nu
     semanticScore: entry.semanticScore,
     semanticStrength: entry.semanticScore ? semanticStrengthLabel(entry.semanticScore) : "general fallback",
     semanticSource: entry.semanticSource,
+    pinned: Boolean(entry.pinned),
+    manual: Boolean(entry.manual),
   };
 }
 

@@ -63,11 +63,13 @@ export type ResolvedUiTheme = Exclude<UiTheme, "system">;
 
 export interface DisplaySettings {
   showWordDetails: boolean;
+  showInlineDefinitions: boolean;
   uiTheme: UiTheme;
 }
 
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showWordDetails: false,
+  showInlineDefinitions: false,
   uiTheme: "system",
 };
 

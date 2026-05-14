@@ -5,6 +5,7 @@ export function generateSets(
   basePool: WordEntry[],
   semanticPool: WordEntry[],
   filters: Filters,
+  options: { preservedSets?: GeneratedSet[] } = {},
 ): GeneratedSet[] {
   const seed = numericSeed(filters.seed || String(Date.now()));
   const random = mulberry32(seed);
@@ -18,10 +19,21 @@ export function generateSets(
   let cursor = 0;
 
   for (let setIndex = 0; setIndex < filters.setCount; setIndex += 1) {
-    const words: WordEntry[] = [];
+    const words = preservedWords(options.preservedSets?.[setIndex], filters.wordsPerSet);
     const localUsed = new Set<string>();
     const localRoots = new Set<string>();
-    while (words.length < filters.wordsPerSet && cursor < shuffled.length) {
+
+    for (const pinned of words) {
+      if (!pinned) continue;
+      const root = familyKey(pinned.word);
+      localUsed.add(pinned.word);
+      localRoots.add(root);
+      globalUsed.add(pinned.word);
+      globalRoots.add(root);
+    }
+
+    let slot = nextEmptySlot(words);
+    while (slot !== -1 && cursor < shuffled.length) {
       const candidate = shuffled[cursor];
       cursor += 1;
       const root = familyKey(candidate.word);
@@ -35,21 +47,35 @@ export function generateSets(
       if (!filters.duplicateMode && filters.uniqueWords && (globalUsed.has(candidate.word) || localRoots.has(root) || globalRoots.has(root))) {
         continue;
       }
-      words.push(candidate);
+      words[slot] = candidate;
       localUsed.add(candidate.word);
       localRoots.add(root);
       globalUsed.add(candidate.word);
       globalRoots.add(root);
+      slot = nextEmptySlot(words);
     }
     sets.push({
       id: `${seed}-${setIndex}-${Date.now()}`,
-      words,
+      words: words.filter((word): word is WordEntry => Boolean(word)),
       theme: filters.theme.trim(),
       createdAt: new Date().toISOString(),
     });
   }
 
   return sets;
+}
+
+function preservedWords(set: GeneratedSet | undefined, size: number) {
+  const words: Array<WordEntry | null> = Array.from({ length: size }, () => null);
+  if (!set) return words;
+  set.words.slice(0, size).forEach((entry, index) => {
+    if (entry.pinned) words[index] = entry;
+  });
+  return words;
+}
+
+function nextEmptySlot(words: Array<WordEntry | null>) {
+  return words.findIndex((word) => !word);
 }
 
 function selectPool(basePool: WordEntry[], semanticPool: WordEntry[], filters: Filters) {

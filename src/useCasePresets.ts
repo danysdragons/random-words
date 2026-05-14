@@ -1,0 +1,121 @@
+import type { Filters } from "./types";
+
+export interface UseCasePreset {
+  id: string;
+  label: string;
+  intent: string;
+  filters: Partial<Filters>;
+}
+
+export const USE_CASE_PRESETS: UseCasePreset[] = [
+  {
+    id: "writing-sparks",
+    label: "Writing Sparks",
+    intent: "Balanced nouns, verbs, and adjectives for scenes, prompts, and exercises.",
+    filters: {
+      wordsPerSet: 12,
+      setCount: 3,
+      minLength: 3,
+      maxLength: 12,
+      selectedPos: ["noun", "verb", "adjective"],
+      qualityMode: "balanced",
+      duplicateMode: "family",
+      uniqueWords: true,
+      semanticMode: "evocative",
+      semanticWeight: 2,
+      fallbackToGeneral: true,
+    },
+  },
+  {
+    id: "naming",
+    label: "Naming",
+    intent: "Short, vivid words for projects, products, places, and fictional names.",
+    filters: {
+      wordsPerSet: 16,
+      setCount: 2,
+      minLength: 3,
+      maxLength: 9,
+      selectedPos: ["noun", "adjective"],
+      qualityMode: "surprising",
+      duplicateMode: "family",
+      uniqueWords: true,
+      includePhrases: false,
+      semanticMode: "broad",
+      semanticWeight: 3,
+    },
+  },
+  {
+    id: "poetry",
+    label: "Poetry",
+    intent: "Image-heavy words with room for mood, motion, and sensory texture.",
+    filters: {
+      wordsPerSet: 14,
+      setCount: 3,
+      minLength: 2,
+      maxLength: 13,
+      selectedPos: ["noun", "verb", "adjective", "adverb"],
+      qualityMode: "surprising",
+      duplicateMode: "family",
+      uniqueWords: true,
+      semanticMode: "sensory",
+      semanticWeight: 3,
+      fallbackToGeneral: true,
+    },
+  },
+  {
+    id: "classroom",
+    label: "Classroom",
+    intent: "Common, clean vocabulary with conservative length and POS settings.",
+    filters: {
+      wordsPerSet: 10,
+      setCount: 4,
+      minLength: 3,
+      maxLength: 10,
+      includeRare: false,
+      selectedPos: ["noun", "verb", "adjective"],
+      qualityMode: "common",
+      duplicateMode: "word",
+      uniqueWords: true,
+      semanticMode: "strict",
+      fallbackToGeneral: true,
+    },
+  },
+  {
+    id: "game-prompts",
+    label: "Game Prompts",
+    intent: "Actionable words for tabletop prompts, encounters, and improvisation.",
+    filters: {
+      wordsPerSet: 12,
+      setCount: 4,
+      minLength: 3,
+      maxLength: 12,
+      selectedPos: ["noun", "verb", "adjective"],
+      qualityMode: "balanced",
+      duplicateMode: "family",
+      uniqueWords: true,
+      semanticMode: "actions",
+      semanticWeight: 3,
+      includePhrases: true,
+    },
+  },
+  {
+    id: "memorable",
+    label: "Memorable",
+    intent: "Readable, common words suited to mnemonic lists and password-like phrases.",
+    filters: {
+      wordsPerSet: 6,
+      setCount: 4,
+      minLength: 4,
+      maxLength: 8,
+      includeRare: false,
+      selectedPos: ["noun", "verb", "adjective"],
+      qualityMode: "common",
+      duplicateMode: "word",
+      uniqueWords: true,
+      noContractions: true,
+      noHyphenated: true,
+      includePhrases: false,
+      fallbackToGeneral: true,
+    },
+  },
+];

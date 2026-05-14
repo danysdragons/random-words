@@ -75,6 +75,8 @@ export interface WordEntry {
   semanticSource?: "local" | "datamuse";
   frequencyBand: string;
   isPhrase: boolean;
+  pinned?: boolean;
+  manual?: boolean;
 }
 
 export interface GeneratedSet {

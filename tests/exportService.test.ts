@@ -20,6 +20,8 @@ const word: WordEntry = {
   semanticSource: "local",
   frequencyBand: "core",
   isPhrase: false,
+  pinned: true,
+  manual: true,
 };
 
 const set: GeneratedSet = {
@@ -41,11 +43,12 @@ describe("exportService", () => {
     const csv = serializeSets([set], "csv", filters);
     expect(csv).toContain("exported_at,set,position,word");
     expect(csv).toContain('"harbor"');
+    expect(csv).toContain('"yes","yes"');
     expect(csv).toContain('"strict"');
 
     const text = serializeSets([set], "txt", filters);
     expect(text).toContain("Theme: ocean");
-    expect(text).toContain("Set 1\nharbor");
+    expect(text).toContain("Set 1\nharbor [pinned] [manual]");
   });
 
   it("serializes diagnostics with context and semantic metadata", () => {
