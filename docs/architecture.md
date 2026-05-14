@@ -44,6 +44,7 @@ The core design choices are:
 | DB preprocessing | `scripts/build-db.mjs` | Download wordlists, normalize entries, infer metadata, build SQLite artifact and build metadata |
 | DB auditing | `scripts/audit-db.mjs` | Inspect generated database quality buckets and targeted watchlists |
 | WASM copying | `scripts/copy-sql-wasm.mjs` | Copy `sql.js` WASM into `public/` for Vite/GitHub Pages |
+| Unit tests | `tests/*.test.ts`, `vitest.config.ts` | Fast coverage for extracted share, export, and import services |
 | Smoke tests | `tests/smoke.spec.ts` | Browser-level coverage for load, generation, POS filtering, sharing |
 | Deployment | `.github/workflows/pages.yml`, `vite.config.ts` | GitHub Pages workflow and base path behavior |
 | User documentation | `docs/user-manual.md` | User-facing operation guide |
@@ -631,6 +632,7 @@ flowchart TD
   Node["Setup Node 22<br/>npm cache"]
   Install["npm ci"]
   Browser["Install Playwright Chromium"]
+  Unit["npm run test:unit"]
   Smoke["CI=true npm run test:smoke"]
   Build["npm run build"]
   Upload["Upload dist artifact"]
@@ -642,7 +644,8 @@ flowchart TD
   Checkout --> Node
   Node --> Install
   Install --> Browser
-  Browser --> Smoke
+  Browser --> Unit
+  Unit --> Smoke
   Smoke --> Build
   Build --> Upload
   Upload --> Deploy
@@ -651,7 +654,7 @@ flowchart TD
 
 The workflow is defined in `.github/workflows/pages.yml`.
 
-The build step runs after smoke tests. This means the deployed artifact is only produced if the browser-level tests pass.
+The build step runs after unit and smoke tests. This means the deployed artifact is only produced if the extracted service tests and browser-level tests pass.
 
 `vite.config.ts` sets the Vite `base` path dynamically under GitHub Actions:
 
@@ -660,7 +663,9 @@ The build step runs after smoke tests. This means the deployed artifact is only 
 
 ## Testing And Verification
 
-The primary automated verification is `npm run test:smoke`, which runs Playwright tests against the app.
+Fast service-level verification is handled by `npm run test:unit`, which runs Vitest against extracted pure logic such as share links, exports, and saved-library imports.
+
+The primary browser workflow verification is `npm run test:smoke`, which runs Playwright tests against the app.
 
 Current smoke coverage includes:
 

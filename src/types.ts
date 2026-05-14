@@ -102,6 +102,19 @@ export type ExportFormat = "json" | "csv" | "txt";
 
 export type AppView = "generator" | "saved" | "collections" | "diagnostics" | "about" | "manual";
 
+export type DiagnosticRowFilter = "all" | "low-confidence" | "semantic" | "datamuse-only" | "fallback";
+
+export interface DiagnosticRow {
+  entry: WordEntry;
+  setIndex: number;
+  wordIndex: number;
+}
+
+export interface DiagnosticExportContext {
+  rowFilter: DiagnosticRowFilter;
+  query: string;
+}
+
 export interface BuildMeta {
   source: string;
   generatedAt: string;

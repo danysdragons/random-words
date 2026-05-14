@@ -37,6 +37,7 @@ The dev server preprocesses the pinned SCOWL/ESDB wordlists, writes local genera
 npm run build
 npm run audit:data
 npm run report:data
+npm run test:unit
 CI=true npm run test:smoke
 ```
 

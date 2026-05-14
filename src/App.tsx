@@ -22,14 +22,38 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  APP_VERSION,
+  DEFAULT_DISPLAY_SETTINGS,
+  DEFAULT_FILTERS,
+  DIALECT_LABELS,
+  DUPLICATE_LABELS,
+  MODE_LABELS,
+  POS_OPTIONS,
+  QUALITY_LABELS,
+  UI_THEME_LABELS,
+  resolveUiTheme,
+  uiThemeValue,
+  type DisplaySettings,
+  type ResolvedUiTheme,
+  type UiTheme,
+} from "./constants";
 import { loadWordDatabase, localPoolCriteriaKey, queryWords, type WordDatabase } from "./data";
 import { fetchDefinitions, fetchSemanticWords } from "./datamuse";
 import { generateSets } from "./generator";
+import { usePersistentState } from "./hooks/usePersistentState";
+import { exportFileName, exportMime, serializeDiagnostics, serializeSets } from "./services/exportService";
+import { mergeById, parseSavedWorkspace, serializeSavedWorkspace } from "./services/importService";
+import { createShareUrl, readSharedCriteriaFromUrl } from "./services/shareLink";
+import { createId } from "./services/valueUtils";
 import userManualMarkdown from "../docs/user-manual.md?raw";
 import type {
   AppView,
   Collection,
   Dialect,
+  DiagnosticExportContext,
+  DiagnosticRow,
+  DiagnosticRowFilter,
   DuplicateMode,
   ExportFormat,
   Filters,
@@ -40,18 +64,6 @@ import type {
   SemanticMode,
   WordEntry,
 } from "./types";
-
-const POS_OPTIONS: PartOfSpeech[] = [
-  "noun",
-  "verb",
-  "adjective",
-  "adverb",
-  "pronoun",
-  "preposition",
-  "conjunction",
-  "interjection",
-  "other",
-];
 
 interface ThemePreset {
   label: string;
@@ -108,126 +120,11 @@ const THEME_PRESET_GROUPS: ThemePresetGroup[] = [
   },
 ];
 
-const DEFAULT_FILTERS: Filters = {
-  wordsPerSet: 12,
-  setCount: 3,
-  minLength: 2,
-  maxLength: 12,
-  includeRare: false,
-  qualityMode: "balanced",
-  selectedPos: ["noun", "verb", "adjective"],
-  dialect: "us",
-  startsWith: "",
-  endsWith: "",
-  contains: "",
-  excludes: "",
-  wordPattern: "",
-  minSyllables: 1,
-  maxSyllables: 8,
-  uniqueWords: true,
-  duplicateMode: "family",
-  excludeOffensive: true,
-  noProperNouns: true,
-  noAcronyms: true,
-  noContractions: true,
-  noHyphenated: true,
-  theme: "",
-  semanticMode: "broad",
-  includePhrases: false,
-  semanticLimit: 600,
-  semanticWeight: 2,
-  fallbackToGeneral: true,
-  useSeededGeneration: false,
-  seed: "728391",
-};
-
-const APP_VERSION = "1.0.0";
-
-interface DisplaySettings {
-  showWordDetails: boolean;
-  uiTheme: UiTheme;
-}
-
-const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
-  showWordDetails: false,
-  uiTheme: "system",
-};
-
-type UiTheme =
-  | "system"
-  | "light"
-  | "dark"
-  | "high-contrast"
-  | "ink"
-  | "forest"
-  | "ocean"
-  | "sunrise"
-  | "solar-light"
-  | "solar-dark";
-
-type ResolvedUiTheme = Exclude<UiTheme, "system">;
-
-const UI_THEME_LABELS: Record<UiTheme, string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
-  "high-contrast": "High Contrast",
-  ink: "Ink",
-  forest: "Forest",
-  ocean: "Ocean",
-  sunrise: "Sunrise",
-  "solar-light": "Solar Light",
-  "solar-dark": "Solar Dark",
-};
-
-const DIALECT_LABELS: Record<Dialect, string> = {
-  us: "American English",
-  gb: "British English",
-  ca: "Canadian English",
-  au: "Australian English",
-};
-
-const MODE_LABELS: Record<SemanticMode, string> = {
-  strict: "Strict category",
-  broad: "Broad theme",
-  related: "Related concepts",
-  mood: "Mood / tone",
-  evocative: "Evocative",
-  concrete: "Concrete objects",
-  actions: "Actions & motion",
-  sensory: "Sensory",
-};
-
-const QUALITY_LABELS: Record<QualityMode, string> = {
-  balanced: "Balanced",
-  common: "Common first",
-  surprising: "More surprising",
-};
-
-const DUPLICATE_LABELS: Record<DuplicateMode, string> = {
-  allow: "Allow repeats",
-  word: "Unique words",
-  family: "Unique families",
-};
-
 interface HistoryEntry {
   id: string;
   sets: GeneratedSet[];
   filters: Filters;
   createdAt: string;
-}
-
-type DiagnosticRowFilter = "all" | "low-confidence" | "semantic" | "datamuse-only" | "fallback";
-
-interface DiagnosticRow {
-  entry: WordEntry;
-  setIndex: number;
-  wordIndex: number;
-}
-
-interface DiagnosticExportContext {
-  rowFilter: DiagnosticRowFilter;
-  query: string;
 }
 
 function App() {
@@ -270,7 +167,7 @@ function App() {
   }, [activeUiTheme]);
 
   useEffect(() => {
-    const sharedCriteria = readSharedCriteriaFromUrl();
+    const sharedCriteria = readSharedCriteriaFromUrl(window.location.href);
     if (sharedCriteria.status === "none") return;
     if (sharedCriteria.status === "invalid") {
       setView("generator");
@@ -431,7 +328,7 @@ function App() {
   }
 
   async function copyShareLink() {
-    const href = createShareUrl(filters);
+    const href = createShareUrl(window.location.href, filters);
     window.history.replaceState(null, "", href);
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
@@ -2101,449 +1998,6 @@ async function copyWords(words: WordEntry[], setToast: (message: string) => void
   }
 }
 
-function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filters) {
-  const exportedAt = new Date().toISOString();
-  const criteria = exportCriteria(filters);
-  if (format === "json") return JSON.stringify({ exportedAt, criteria, sets }, null, 2);
-  if (format === "csv") {
-    return [
-      "exported_at,set,position,word,part_of_speech,alternate_pos,frequency_band,quality_score,source,semantic_score,semantic_source,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
-      ...sets.flatMap((set, setIndex) =>
-        set.words.map((entry, wordIndex) =>
-          [
-            exportedAt,
-            setIndex + 1,
-            wordIndex + 1,
-            entry.word,
-            entry.pos,
-            entry.alternatePos?.join("|") ?? "",
-            entry.frequencyBand,
-            entry.qualityScore,
-            entry.source,
-            entry.semanticScore ?? "",
-            entry.semanticSource ?? "",
-            set.theme,
-            criteria.theme,
-            criteria.semanticMode,
-            criteria.qualityMode,
-            criteria.useSeededGeneration ? "seeded" : "fresh",
-            criteria.seed,
-          ]
-            .map(csvEscape)
-            .join(","),
-        ),
-      ),
-    ].join("\n");
-  }
-  const criteriaLines = [
-    `Exported: ${exportedAt}`,
-    `Theme: ${criteria.theme || "random"}`,
-    `Semantic mode: ${criteria.semanticMode}`,
-    `Quality mode: ${QUALITY_LABELS[criteria.qualityMode]}`,
-    `Seed mode: ${criteria.useSeededGeneration ? "seeded" : "fresh each click"}`,
-    `Seed: ${criteria.seed}`,
-    `Length: ${criteria.minLength}-${criteria.maxLength}`,
-    `Syllables: ${criteria.minSyllables}-${criteria.maxSyllables}`,
-    `Pattern: ${criteria.wordPattern || "none"}`,
-    `Duplicate control: ${DUPLICATE_LABELS[criteria.duplicateMode]}`,
-    `Parts of speech: ${criteria.selectedPos.join(", ") || "any"}`,
-    `Dialect: ${criteria.dialect}`,
-  ].join("\n");
-  return `${criteriaLines}\n\n${sets
-    .map((set, index) => `Set ${index + 1}\n${set.words.map((entry) => entry.word).join(", ")}`)
-    .join("\n\n")}`;
-}
-
-function serializeDiagnostics(
-  rows: DiagnosticRow[],
-  format: ExportFormat,
-  filters: Filters,
-  semanticStats: {
-    total: number;
-    localMatches: number;
-    datamuseOnly: number;
-    generatedSemanticWords: number;
-  },
-  context: DiagnosticExportContext,
-) {
-  const exportedAt = new Date().toISOString();
-  const criteria = exportCriteria(filters);
-  const diagnostics = rows.map(({ entry, setIndex, wordIndex }) => diagnosticRowToRecord(entry, setIndex, wordIndex));
-
-  if (format === "json") {
-    return JSON.stringify(
-      {
-        exportedAt,
-        criteria,
-        diagnosticsContext: {
-          rowFilter: context.rowFilter,
-          query: context.query.trim(),
-          rowCount: rows.length,
-        },
-        semanticStats,
-        rows: diagnostics,
-      },
-      null,
-      2,
-    );
-  }
-
-  if (format === "csv") {
-    return [
-      "exported_at,row_filter,query,set,position,word,base_form,part_of_speech,alternate_pos,pos_source,pos_confidence,frequency_band,quality_score,source,semantic_score,semantic_strength,semantic_source",
-      ...diagnostics.map((row) =>
-        [
-          exportedAt,
-          context.rowFilter,
-          context.query.trim(),
-          row.set,
-          row.position,
-          row.word,
-          row.baseForm,
-          row.partOfSpeech,
-          row.alternatePos.join("|"),
-          row.posSource,
-          row.posConfidence,
-          row.frequencyBand,
-          row.qualityScore,
-          row.source,
-          row.semanticScore ?? "",
-          row.semanticStrength,
-          row.semanticSource ?? "",
-        ]
-          .map(csvEscape)
-          .join(","),
-      ),
-    ].join("\n");
-  }
-
-  const header = [
-    `Exported: ${exportedAt}`,
-    `Rows: ${rows.length}`,
-    `Filter: ${context.rowFilter}`,
-    `Search: ${context.query.trim() || "none"}`,
-    `Theme: ${criteria.theme || "random"}`,
-    `Semantic mode: ${criteria.semanticMode}`,
-    `Quality mode: ${QUALITY_LABELS[criteria.qualityMode]}`,
-    `Semantic pool: ${semanticStats.total} candidates, ${semanticStats.localMatches} local matches, ${semanticStats.datamuseOnly} Datamuse-only`,
-  ].join("\n");
-
-  return `${header}\n\n${diagnostics
-    .map(
-      (row) =>
-        `${row.set}.${row.position} ${row.word} [${posShort(row.partOfSpeech)}] ` +
-        `${row.posSource}, ${row.posConfidence}% confidence, ${row.frequencyBand}, quality ${row.qualityScore}, ` +
-        `${row.semanticStrength || "general fallback"}, ${row.source}`,
-    )
-    .join("\n")}`;
-}
-
-function diagnosticRowToRecord(entry: WordEntry, setIndex: number, wordIndex: number) {
-  return {
-    set: setIndex + 1,
-    position: wordIndex + 1,
-    word: entry.word,
-    baseForm: entry.baseForm,
-    partOfSpeech: entry.pos,
-    alternatePos: entry.alternatePos,
-    posSource: entry.posSource,
-    posConfidence: entry.posConfidence,
-    frequencyBand: entry.frequencyBand,
-    qualityScore: entry.qualityScore,
-    source: entry.source === "scowl" ? "SQLite" : "Datamuse",
-    semanticScore: entry.semanticScore,
-    semanticStrength: entry.semanticScore ? semanticStrengthLabel(entry.semanticScore) : "general fallback",
-    semanticSource: entry.semanticSource,
-  };
-}
-
-function csvEscape(value: unknown) {
-  return `"${String(value).replaceAll("\"", "\"\"")}"`;
-}
-
-function exportFileName(baseName: string, format: ExportFormat, filters: Filters) {
-  const theme = filters.theme.trim() ? `-${slugify(filters.theme)}` : "";
-  return `${baseName}${theme}-${new Date().toISOString().slice(0, 10)}.${format}`;
-}
-
-function slugify(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
-}
-
-function serializeSavedWorkspace(savedSets: SavedSet[], collections: Collection[]) {
-  return JSON.stringify(
-    {
-      app: "random-words",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      collections,
-      savedSets,
-    },
-    null,
-    2,
-  );
-}
-
-function parseSavedWorkspace(text: string) {
-  const payload = JSON.parse(text) as unknown;
-  if (!isPlainObject(payload)) throw new Error("Import file is not a valid Random Words library.");
-  const collections = arrayValue(payload.collections)
-    .map(normalizeImportedCollection)
-    .filter((collection): collection is Collection => Boolean(collection));
-  const savedSets = arrayValue(payload.savedSets)
-    .map(normalizeImportedSavedSet)
-    .filter((saved): saved is SavedSet => Boolean(saved));
-  if (!collections.length && !savedSets.length) {
-    throw new Error("Import file did not contain saved sets or collections.");
-  }
-  return { collections, savedSets };
-}
-
-function normalizeImportedCollection(value: unknown): Collection | null {
-  if (!isPlainObject(value)) return null;
-  const id = stringValue(value.id).trim() || createId("collection");
-  const name = stringValue(value.name).trim();
-  if (!name) return null;
-  return {
-    id,
-    name,
-    createdAt: parseDateString(value.createdAt) ?? new Date().toISOString(),
-  };
-}
-
-function normalizeImportedSavedSet(value: unknown): SavedSet | null {
-  if (!isPlainObject(value)) return null;
-  const set = normalizeImportedGeneratedSet(value.set);
-  if (!set) return null;
-  return {
-    id: stringValue(value.id).trim() || createId("saved"),
-    name: stringValue(value.name).trim() || `${set.theme || "Imported"} Set`,
-    set,
-    savedAt: parseDateString(value.savedAt) ?? new Date().toISOString(),
-    collectionId: stringValue(value.collectionId).trim() || null,
-  };
-}
-
-function normalizeImportedGeneratedSet(value: unknown): GeneratedSet | null {
-  if (!isPlainObject(value)) return null;
-  const words = arrayValue(value.words)
-    .map(normalizeImportedWordEntry)
-    .filter((entry): entry is WordEntry => Boolean(entry));
-  if (!words.length) return null;
-  return {
-    id: stringValue(value.id).trim() || createId("set"),
-    words,
-    theme: stringValue(value.theme),
-    createdAt: parseDateString(value.createdAt) ?? new Date().toISOString(),
-  };
-}
-
-function normalizeImportedWordEntry(value: unknown): WordEntry | null {
-  if (!isPlainObject(value)) return null;
-  const word = stringValue(value.word).trim().toLowerCase();
-  if (!word) return null;
-  const pos = POS_OPTIONS.includes(value.pos as PartOfSpeech) ? (value.pos as PartOfSpeech) : "other";
-  return {
-    id: boundedNumber(value.id, -Date.now(), Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER),
-    word,
-    length: boundedNumber(value.length, word.replace(/[^a-z]/g, "").length, 0, 100),
-    pos,
-    alternatePos: importedPosList(value.alternatePos),
-    baseForm: stringValue(value.baseForm).trim() || word,
-    posSource: posSourceValue(value.posSource),
-    posConfidence: boundedNumber(value.posConfidence, 30, 0, 100),
-    commonness: value.commonness === "rare" ? "rare" : "common",
-    source: value.source === "datamuse" ? "datamuse" : "scowl",
-    score: boundedNumber(value.score, 0, 0, Number.MAX_SAFE_INTEGER),
-    qualityScore: boundedNumber(value.qualityScore, 1, 0, 100),
-    semanticScore: optionalNumber(value.semanticScore),
-    semanticSource: value.semanticSource === "datamuse" ? "datamuse" : value.semanticSource === "local" ? "local" : undefined,
-    frequencyBand: stringValue(value.frequencyBand).trim() || "imported",
-    isPhrase: Boolean(value.isPhrase),
-  };
-}
-
-function mergeById<T extends { id: string }>(current: T[], imported: T[]) {
-  const existing = new Set(current.map((item) => item.id));
-  return [...current, ...imported.filter((item) => !existing.has(item.id))];
-}
-
-function importedPosList(value: unknown): PartOfSpeech[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is PartOfSpeech => POS_OPTIONS.includes(item as PartOfSpeech));
-}
-
-function arrayValue(value: unknown) {
-  return Array.isArray(value) ? value : [];
-}
-
-function parseDateString(value: unknown) {
-  const text = stringValue(value);
-  return Number.isNaN(Date.parse(text)) ? null : text;
-}
-
-function optionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function posSourceValue(value: unknown): WordEntry["posSource"] {
-  if (value === "override" || value === "morphology" || value === "suffix" || value === "default" || value === "datamuse") {
-    return value;
-  }
-  return "default";
-}
-
-function createShareUrl(filters: Filters) {
-  const url = new URL(window.location.href);
-  url.hash = "";
-  url.searchParams.set("criteria", encodeSharePayload(filters));
-  return url.href;
-}
-
-type SharedCriteriaResult =
-  | { status: "none" }
-  | { status: "invalid" }
-  | { status: "loaded"; filters: Filters; summary: string };
-
-function readSharedCriteriaFromUrl(): SharedCriteriaResult {
-  const encoded = new URL(window.location.href).searchParams.get("criteria");
-  if (!encoded) return { status: "none" };
-  try {
-    const payload = JSON.parse(decodeSharePayload(encoded)) as unknown;
-    const filters = normalizeSharedFilters(payload);
-    if (!filters) return { status: "invalid" };
-    return { status: "loaded", filters, summary: summarizeSharedCriteria(filters) };
-  } catch {
-    return { status: "invalid" };
-  }
-}
-
-function encodeSharePayload(filters: Filters) {
-  const json = JSON.stringify(exportCriteria(filters));
-  const bytes = new TextEncoder().encode(json);
-  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-
-function decodeSharePayload(encoded: string) {
-  const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(encoded.length / 4) * 4, "=");
-  const binary = atob(base64);
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-function normalizeSharedFilters(payload: unknown): Filters | null {
-  if (!isPlainObject(payload)) return null;
-  return {
-    ...DEFAULT_FILTERS,
-    wordsPerSet: boundedNumber(payload.wordsPerSet, DEFAULT_FILTERS.wordsPerSet, 1, 40),
-    setCount: boundedNumber(payload.setCount, DEFAULT_FILTERS.setCount, 1, 8),
-    minLength: boundedNumber(payload.minLength, DEFAULT_FILTERS.minLength, 1, 30),
-    maxLength: boundedNumber(payload.maxLength, DEFAULT_FILTERS.maxLength, 1, 30),
-    includeRare: booleanValue(payload.includeRare, DEFAULT_FILTERS.includeRare),
-    qualityMode: qualityModeValue(payload.qualityMode),
-    selectedPos: posList(payload.selectedPos),
-    dialect: dialectValue(payload.dialect),
-    startsWith: stringValue(payload.startsWith),
-    endsWith: stringValue(payload.endsWith),
-    contains: stringValue(payload.contains),
-    excludes: stringValue(payload.excludes),
-    wordPattern: stringValue(payload.wordPattern),
-    minSyllables: boundedNumber(payload.minSyllables, DEFAULT_FILTERS.minSyllables, 1, 8),
-    maxSyllables: boundedNumber(payload.maxSyllables, DEFAULT_FILTERS.maxSyllables, 1, 8),
-    uniqueWords: booleanValue(payload.uniqueWords, DEFAULT_FILTERS.uniqueWords),
-    duplicateMode: duplicateModeValue(payload.duplicateMode, booleanValue(payload.uniqueWords, DEFAULT_FILTERS.uniqueWords)),
-    excludeOffensive: booleanValue(payload.excludeOffensive, DEFAULT_FILTERS.excludeOffensive),
-    noProperNouns: booleanValue(payload.noProperNouns, DEFAULT_FILTERS.noProperNouns),
-    noAcronyms: booleanValue(payload.noAcronyms, DEFAULT_FILTERS.noAcronyms),
-    noContractions: booleanValue(payload.noContractions, DEFAULT_FILTERS.noContractions),
-    noHyphenated: booleanValue(payload.noHyphenated, DEFAULT_FILTERS.noHyphenated),
-    theme: stringValue(payload.theme),
-    semanticMode: semanticModeValue(payload.semanticMode),
-    includePhrases: booleanValue(payload.includePhrases, DEFAULT_FILTERS.includePhrases),
-    semanticLimit: boundedNumber(payload.semanticLimit, DEFAULT_FILTERS.semanticLimit, 100, 1000),
-    semanticWeight: boundedNumber(payload.semanticWeight, DEFAULT_FILTERS.semanticWeight, 1, 5),
-    fallbackToGeneral: booleanValue(payload.fallbackToGeneral, DEFAULT_FILTERS.fallbackToGeneral),
-    useSeededGeneration: booleanValue(payload.useSeededGeneration, DEFAULT_FILTERS.useSeededGeneration),
-    seed: stringValue(payload.seed) || DEFAULT_FILTERS.seed,
-  };
-}
-
-function summarizeSharedCriteria(filters: Filters) {
-  const parts = [
-    `${filters.setCount} set${filters.setCount === 1 ? "" : "s"}`,
-    `${filters.wordsPerSet} word${filters.wordsPerSet === 1 ? "" : "s"} each`,
-  ];
-  if (filters.theme.trim()) parts.push(`theme "${filters.theme.trim()}"`);
-  if (filters.semanticMode !== DEFAULT_FILTERS.semanticMode) parts.push(MODE_LABELS[filters.semanticMode]);
-  if (filters.qualityMode !== DEFAULT_FILTERS.qualityMode) parts.push(QUALITY_LABELS[filters.qualityMode]);
-  return parts.join(", ");
-}
-
-function exportCriteria(filters: Filters): Filters {
-  return {
-    ...filters,
-    selectedPos: filters.selectedPos.filter((pos) => POS_OPTIONS.includes(pos)),
-  };
-}
-
-function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
-  const number = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, Math.round(number)));
-}
-
-function booleanValue(value: unknown, fallback: boolean) {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function stringValue(value: unknown) {
-  return typeof value === "string" ? value : "";
-}
-
-function posList(value: unknown): PartOfSpeech[] {
-  if (!Array.isArray(value)) return DEFAULT_FILTERS.selectedPos;
-  const selected = value.filter((item): item is PartOfSpeech => POS_OPTIONS.includes(item as PartOfSpeech));
-  return selected.length ? selected : DEFAULT_FILTERS.selectedPos;
-}
-
-function dialectValue(value: unknown): Dialect {
-  return value === "us" || value === "gb" || value === "ca" || value === "au" ? value : DEFAULT_FILTERS.dialect;
-}
-
-function semanticModeValue(value: unknown): SemanticMode {
-  return value === "strict" ||
-    value === "broad" ||
-    value === "related" ||
-    value === "mood" ||
-    value === "evocative" ||
-    value === "concrete" ||
-    value === "actions" ||
-    value === "sensory"
-    ? value
-    : DEFAULT_FILTERS.semanticMode;
-}
-
-function qualityModeValue(value: unknown): QualityMode {
-  return value === "balanced" || value === "common" || value === "surprising"
-    ? value
-    : DEFAULT_FILTERS.qualityMode;
-}
-
-function duplicateModeValue(value: unknown, uniqueWords: boolean): DuplicateMode {
-  if (value === "allow" || value === "word" || value === "family") return value;
-  return uniqueWords ? DEFAULT_FILTERS.duplicateMode : "allow";
-}
-
-function uiThemeValue(value: unknown): UiTheme {
-  return typeof value === "string" && value in UI_THEME_LABELS ? (value as UiTheme) : DEFAULT_DISPLAY_SETTINGS.uiTheme;
-}
-
-function resolveUiTheme(theme: UiTheme, systemPrefersDark: boolean): ResolvedUiTheme {
-  if (theme === "system") return systemPrefersDark ? "dark" : "light";
-  return theme;
-}
-
 function prepareGenerationFilters(filters: Filters): Filters {
   if (filters.useSeededGeneration) return filters;
   return {
@@ -2556,12 +2010,6 @@ function createRandomSeed() {
   return String(Math.floor(100000000 + Math.random() * 900000000));
 }
 
-function exportMime(format: ExportFormat) {
-  if (format === "json") return "application/json";
-  if (format === "csv") return "text/csv";
-  return "text/plain";
-}
-
 function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -2569,36 +2017,6 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.download = fileName;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-function usePersistentState<T>(key: string, initialValue: T) {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const stored = localStorage.getItem(key);
-      if (!stored) return initialValue;
-      const parsed = JSON.parse(stored) as T;
-      if (isPlainObject(initialValue) && isPlainObject(parsed)) {
-        return { ...initialValue, ...parsed } as T;
-      }
-      return parsed;
-    } catch {
-      return initialValue;
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value));
-  }, [key, value]);
-
-  return [value, setValue] as const;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function createId(prefix: string) {
-  return `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
 
 function formatDate(value: string) {
