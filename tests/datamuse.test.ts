@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_FILTERS } from "../src/constants";
-import { fetchSemanticWords } from "../src/datamuse";
+import { fetchDefinitions, fetchSemanticWords } from "../src/datamuse";
 import type { WordEntry } from "../src/types";
 
 const CACHE_KEY = "random-words:datamuse-cache:v5";
@@ -33,6 +33,9 @@ function cachedEntry(word: string): WordEntry {
     pos: "noun",
     alternatePos: [],
     baseForm: word,
+    lemma: word,
+    familyKey: word,
+    syllables: 2,
     posSource: "datamuse",
     posConfidence: 85,
     commonness: "common",
@@ -98,5 +101,57 @@ describe("fetchSemanticWords", () => {
       source: "fallback",
       warning: "Datamuse is unavailable, so this generation used the local word database only.",
     });
+  });
+});
+
+describe("fetchDefinitions", () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: new MemoryStorage(),
+    });
+    vi.restoreAllMocks();
+  });
+
+  it("falls back from inflected words to lemma definitions", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ word: "hugged", defs: [] }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ word: "hug", defHeadword: "hug", defs: ["n\tA close embrace."] }],
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const definitions = await fetchDefinitions([
+      {
+        ...cachedEntry("hugged"),
+        pos: "verb",
+        baseForm: "hug",
+        lemma: "hug",
+        familyKey: "hug",
+        posSource: "morphology",
+      },
+    ]);
+
+    expect(definitions.hugged).toBe("hug: A close embrace.");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses an alternate POS definition instead of showing no definition", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [{ word: "bright", defs: ["n\tA vivid color.", "v\tTo shine."] }],
+      }),
+    );
+
+    const definitions = await fetchDefinitions([{ ...cachedEntry("bright"), pos: "adjective" }]);
+
+    expect(definitions.bright).toBe("A vivid color.");
   });
 });

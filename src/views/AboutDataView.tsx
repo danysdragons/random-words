@@ -39,6 +39,13 @@ export function AboutDataView({ wordDb }: { wordDb: WordDatabase | null }) {
               {(wordDb.meta.quality.posAlternates ?? 0).toLocaleString()} alternate POS entries
             </p>
           )}
+          {wordDb?.meta?.quality?.lemmaEntries && (
+            <p>
+              {wordDb.meta.quality.lemmaEntries.toLocaleString()} lemma-normalized entries ·{" "}
+              {wordDb.meta.quality.familyKeys?.toLocaleString()} family keys ·{" "}
+              {wordDb.meta.quality.syllableEntries?.toLocaleString()} syllable-counted entries
+            </p>
+          )}
         </article>
         <article>
           <Search size={22} />

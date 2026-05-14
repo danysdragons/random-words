@@ -1,5 +1,6 @@
 import { DUPLICATE_LABELS, QUALITY_LABELS } from "../constants";
 import type { DiagnosticExportContext, DiagnosticRow, ExportFormat, Filters, GeneratedSet, PartOfSpeech, WordEntry } from "../types";
+import { estimateSyllables } from "./filterEvaluator";
 import { exportCriteria } from "./shareLink";
 
 export function serializeSets(sets: GeneratedSet[], format: ExportFormat, filters: Filters) {
@@ -8,7 +9,7 @@ export function serializeSets(sets: GeneratedSet[], format: ExportFormat, filter
   if (format === "json") return JSON.stringify({ exportedAt, criteria, sets }, null, 2);
   if (format === "csv") {
     return [
-      "exported_at,set,position,word,part_of_speech,alternate_pos,frequency_band,quality_score,source,semantic_score,semantic_source,pinned,manual,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
+      "exported_at,set,position,word,part_of_speech,alternate_pos,lemma,family_key,syllables,frequency_band,quality_score,source,semantic_score,semantic_source,pinned,manual,set_theme,criteria_theme,semantic_mode,quality_mode,seed_mode,seed",
       ...sets.flatMap((set, setIndex) =>
         set.words.map((entry, wordIndex) =>
           [
@@ -18,6 +19,9 @@ export function serializeSets(sets: GeneratedSet[], format: ExportFormat, filter
             entry.word,
             entry.pos,
             entry.alternatePos?.join("|") ?? "",
+            entryLemma(entry),
+            entryFamilyKey(entry),
+            entrySyllables(entry),
             entry.frequencyBand,
             entry.qualityScore,
             entry.source,
@@ -93,7 +97,7 @@ export function serializeDiagnostics(
 
   if (format === "csv") {
     return [
-      "exported_at,row_filter,query,set,position,word,base_form,part_of_speech,alternate_pos,pos_source,pos_confidence,frequency_band,quality_score,source,semantic_score,semantic_strength,semantic_source,pinned,manual",
+      "exported_at,row_filter,query,set,position,word,base_form,lemma,family_key,syllables,part_of_speech,alternate_pos,pos_source,pos_confidence,frequency_band,quality_score,source,semantic_score,semantic_strength,semantic_source,pinned,manual",
       ...diagnostics.map((row) =>
         [
           exportedAt,
@@ -103,6 +107,9 @@ export function serializeDiagnostics(
           row.position,
           row.word,
           row.baseForm,
+          row.lemma,
+          row.familyKey,
+          row.syllables,
           row.partOfSpeech,
           row.alternatePos.join("|"),
           row.posSource,
@@ -160,6 +167,9 @@ function diagnosticRowToRecord(entry: WordEntry, setIndex: number, wordIndex: nu
     position: wordIndex + 1,
     word: entry.word,
     baseForm: entry.baseForm,
+    lemma: entryLemma(entry),
+    familyKey: entryFamilyKey(entry),
+    syllables: entrySyllables(entry),
     partOfSpeech: entry.pos,
     alternatePos: entry.alternatePos,
     posSource: entry.posSource,
@@ -181,6 +191,18 @@ function csvEscape(value: unknown) {
 
 function slugify(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+}
+
+function entryLemma(entry: WordEntry) {
+  return entry.lemma || entry.baseForm || entry.word;
+}
+
+function entryFamilyKey(entry: WordEntry) {
+  return entry.familyKey || entryLemma(entry).toLowerCase().replace(/[^a-z]/g, "");
+}
+
+function entrySyllables(entry: WordEntry) {
+  return entry.syllables ?? estimateSyllables(entry.word);
 }
 
 function semanticStrengthLabel(score: number) {

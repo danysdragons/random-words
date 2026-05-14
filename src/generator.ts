@@ -25,7 +25,7 @@ export function generateSets(
 
     for (const pinned of words) {
       if (!pinned) continue;
-      const root = familyKey(pinned.word);
+      const root = familyKey(pinned);
       localUsed.add(pinned.word);
       localRoots.add(root);
       globalUsed.add(pinned.word);
@@ -36,7 +36,7 @@ export function generateSets(
     while (slot !== -1 && cursor < shuffled.length) {
       const candidate = shuffled[cursor];
       cursor += 1;
-      const root = familyKey(candidate.word);
+      const root = familyKey(candidate);
       if (localUsed.has(candidate.word)) continue;
       if (filters.duplicateMode === "word" && globalUsed.has(candidate.word)) {
         continue;
@@ -175,8 +175,10 @@ function qualityWeight(item: WordEntry, filters: Filters) {
   return (filters.includeRare ? Math.sqrt(rawWeight) * 10 : rawWeight) * semanticBoost;
 }
 
-function familyKey(word: string) {
-  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+function familyKey(entry: WordEntry) {
+  if (entry.familyKey) return entry.familyKey;
+  if (entry.lemma) return entry.lemma.toLowerCase().replace(/[^a-z]/g, "");
+  const normalized = entry.word.toLowerCase().replace(/[^a-z]/g, "");
   if (normalized.length < 5) return normalized;
   if (normalized.endsWith("ing") && normalized.length > 6) return normalized.slice(0, -3);
   if (normalized.endsWith("ed") && normalized.length > 5) return normalized.slice(0, -2);

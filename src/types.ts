@@ -65,6 +65,9 @@ export interface WordEntry {
   pos: PartOfSpeech;
   alternatePos: PartOfSpeech[];
   baseForm: string;
+  lemma: string;
+  familyKey: string;
+  syllables: number;
   posSource: "override" | "morphology" | "suffix" | "default" | "datamuse";
   posConfidence: number;
   commonness: "common" | "rare";
@@ -137,6 +140,9 @@ export interface BuildMeta {
     posMorphology?: number;
     posLowConfidence?: number;
     posAlternates?: number;
+    lemmaEntries?: number;
+    familyKeys?: number;
+    syllableEntries?: number;
     frequencyCoreWords?: number;
     frequencyFamiliarWords?: number;
     frequencyNichePenalties?: number;

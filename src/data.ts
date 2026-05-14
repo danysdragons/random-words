@@ -64,10 +64,13 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
   const selectedPos = selectedPartOfSpeech(filters.selectedPos);
   const where: string[] = [
     "length BETWEEN ? AND ?",
+    "syllables BETWEEN ? AND ?",
     "is_phrase = 0",
     `${DIALECT_COLUMNS[filters.dialect]} = 1`,
   ];
-  const params: Array<string | number> = [filters.minLength, filters.maxLength];
+  const minSyllables = Math.min(filters.minSyllables, filters.maxSyllables);
+  const maxSyllables = Math.max(filters.minSyllables, filters.maxSyllables);
+  const params: Array<string | number> = [filters.minLength, filters.maxLength, minSyllables, maxSyllables];
 
   if (!filters.includeRare) where.push("commonness = 'common'");
   if (selectedPos.length > 0 && selectedPos.length < 9) {
@@ -103,7 +106,7 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
 
   const result = db.exec(
     `
-      SELECT id, word, length, pos, commonness, quality_score, frequency_band, base_form, pos_source, pos_confidence, alternate_pos
+      SELECT id, word, length, pos, commonness, quality_score, frequency_band, base_form, pos_source, pos_confidence, alternate_pos, lemma, family_key, syllables
       FROM words
       WHERE ${where.join(" AND ")}
       ORDER BY quality_score DESC, word
@@ -122,6 +125,9 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
       posSource: normalizePosSource(String(row[8])),
       posConfidence: Number(row[9]),
       alternatePos: decodeAlternatePos(String(row[10])),
+      lemma: String(row[11]),
+      familyKey: String(row[12]),
+      syllables: Number(row[13]),
       commonness: row[4] === "rare" ? "rare" as const : "common" as const,
       source: "scowl" as const,
       score: Number(row[5]),

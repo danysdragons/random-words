@@ -29,6 +29,7 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import { useResolvedUiTheme } from "./hooks/useResolvedUiTheme";
 import { useWordDefinitions } from "./hooks/useWordDefinitions";
 import { exportFileName, exportMime, serializeDiagnostics, serializeSets } from "./services/exportService";
+import { estimateSyllables } from "./services/filterEvaluator";
 import { mergeById, parseSavedWorkspace, serializeSavedWorkspace } from "./services/importService";
 import { createShareUrl, readSharedCriteriaFromUrl } from "./services/shareLink";
 import { createId } from "./services/valueUtils";
@@ -379,6 +380,7 @@ function App() {
     localStorage.removeItem("random-words:datamuse-cache:v5");
     localStorage.removeItem("random-words:definition-cache:v1");
     localStorage.removeItem("random-words:definition-cache:v2");
+    localStorage.removeItem("random-words:definition-cache:v3");
     clearDefinitions();
     setToast("Cleared semantic and definition cache");
   }
@@ -709,6 +711,9 @@ function manualWordEntry(word: string, previous?: WordEntry): WordEntry {
     pos: previous?.pos ?? "noun",
     alternatePos: previous?.alternatePos ?? [],
     baseForm: normalized,
+    lemma: normalized,
+    familyKey: manualFamilyKey(normalized),
+    syllables: estimateSyllables(normalized),
     posSource: previous?.posSource ?? "default",
     posConfidence: previous?.posConfidence ?? 40,
     commonness: previous?.commonness ?? "common",
@@ -722,6 +727,16 @@ function manualWordEntry(word: string, previous?: WordEntry): WordEntry {
     pinned: previous?.pinned,
     manual: true,
   };
+}
+
+function manualFamilyKey(word: string) {
+  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized.length < 5) return normalized;
+  if (normalized.endsWith("ing") && normalized.length > 6) return normalized.slice(0, -3);
+  if (normalized.endsWith("ed") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("es") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("s") && normalized.length > 5) return normalized.slice(0, -1);
+  return normalized;
 }
 
 export default App;

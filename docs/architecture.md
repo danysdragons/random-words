@@ -150,6 +150,9 @@ The generated `words` table contains one row per normalized word. Key columns in
 - `base_form`
 - `pos_source`
 - `pos_confidence`
+- `lemma`
+- `family_key`
+- `syllables`
 - `is_phrase`
 - `has_apostrophe`
 - `has_hyphen`
@@ -167,6 +170,8 @@ Indexes are created for common filtering paths:
 - Commonness
 - Part of speech
 - Alternate part of speech
+- Family key
+- Syllable count
 - POS source and confidence
 - Quality score
 - Shape flags
@@ -309,16 +314,16 @@ Optional filters apply:
 - Contains all letters
 - Excludes any letters
 - Word pattern, applied client-side with `*` and `?` wildcards
-- Approximate syllable range, applied client-side with vowel-group estimation
+- Syllable range, applied from precomputed database counts for local rows
 - No contractions
 - No hyphenated words
 - No proper nouns
 - No acronyms or initialisms
 - Exclude offensive words
 
-The SQL result is ordered by `quality_score DESC, word`, then converted into `WordEntry[]`. Pattern and syllable filters are applied after SQL conversion because they use app-level matching logic rather than database columns.
+The SQL result is ordered by `quality_score DESC, word`, then converted into `WordEntry[]`. Pattern filters are applied after SQL conversion because they use app-level wildcard matching. Syllables, lemma, and family key are stored in the database for local rows and estimated at runtime for Datamuse-only/manual entries.
 
-The shared `src/services/filterEvaluator.ts` module owns client-side entry filtering for both local database rows and Datamuse rows. It returns an `ok` flag plus a stable rejection reason, which keeps static and semantic filtering aligned and gives diagnostics future access to explanations such as pattern, syllable, POS, acronym, or safety rejection.
+The shared `src/services/filterEvaluator.ts` module owns client-side entry filtering for both local database rows and Datamuse rows. It returns an `ok` flag plus a stable rejection reason, which keeps static and semantic filtering aligned and gives diagnostics access to explanations such as pattern, syllable, POS, acronym, or safety rejection.
 
 ## Semantic Expansion Flow
 
@@ -423,7 +428,7 @@ If reproducible seed mode is enabled, the visible seed is used directly.
 
 `WordSetCard` lets users pin, edit, remove, or append words. Edits and additions create manual `WordEntry` objects that keep the current display POS metadata where possible and mark `manual: true`.
 
-Pinned words are passed back to `generateSets` as `preservedSets`. During generation, each set starts with pinned entries in their existing positions, registers those words and root-family keys as already used, then fills only the empty slots from the weighted shuffled pool. Pins take precedence over duplicate controls because they are explicit user curation.
+Pinned words are passed back to `generateSets` as `preservedSets`. During generation, each set starts with pinned entries in their existing positions, registers those words and stored `family_key` values as already used, then fills only the empty slots from the weighted shuffled pool. Pins take precedence over duplicate controls because they are explicit user curation.
 
 ### Pool Blending
 
@@ -606,7 +611,7 @@ Result exports include:
 - Generated sets
 - Word-level metadata where the format supports it, including pinned and manual state
 
-CSV includes columns for set, position, word, part of speech, frequency band, quality score, source, semantic provenance, pinned state, manual state, theme, semantic mode, quality mode, seed mode, and seed.
+CSV includes columns for set, position, word, part of speech, lemma, family key, syllables, frequency band, quality score, source, semantic provenance, pinned state, manual state, theme, semantic mode, quality mode, seed mode, and seed.
 
 Diagnostics export uses the same `ExportFormat` options. It serializes the currently visible diagnostics rows after diagnostics search and row-filter controls have been applied.
 
@@ -630,7 +635,7 @@ flowchart LR
   SerializeDiagnostics --> DownloadDiagnostics
 ```
 
-Diagnostics exports include the export timestamp, row filter, search query, criteria metadata, semantic summary counts, and row-level provenance such as POS source, POS confidence, frequency band, quality score, source, semantic score, semantic strength, semantic source, pinned state, and manual state.
+Diagnostics exports include the export timestamp, row filter, search query, criteria metadata, semantic summary counts, and row-level provenance such as lemma, family key, syllables, POS source, POS confidence, frequency band, quality score, source, semantic score, semantic strength, semantic source, pinned state, and manual state.
 
 ## Saved Sets And Collections Flow
 

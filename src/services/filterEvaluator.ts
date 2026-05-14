@@ -58,7 +58,7 @@ export function evaluateWordEntry(
   if (filters.noAcronyms && isAcronymLike(entry.word)) return reject("acronym");
   if (filters.excludeOffensive && isOffensiveWord(entry.word)) return reject("offensive");
   if (!matchesWordPattern(entry.word, filters.wordPattern)) return reject("pattern");
-  if (!matchesSyllableRange(entry.word, filters)) return reject("syllables");
+  if (!matchesSyllableRange(entry, filters)) return reject("syllables");
 
   return { ok: true };
 }
@@ -72,11 +72,7 @@ export function matchesAdvancedWordFilters(word: string, filters: Filters) {
 }
 
 export function estimateSyllables(word: string) {
-  const normalized = normalizedLetters(word);
-  if (!normalized) return 1;
-  const groups = normalized.match(/[aeiouy]+/g)?.length ?? 1;
-  const silentE = normalized.length > 3 && normalized.endsWith("e") && !/[aeiouy]le$/.test(normalized) ? 1 : 0;
-  return Math.max(1, groups - silentE);
+  return estimatePhraseSyllables(word);
 }
 
 export function uniqueLetters(value: unknown) {
@@ -111,8 +107,8 @@ function matchesWordPattern(word: string, pattern: unknown) {
   }
 }
 
-function matchesSyllableRange(word: string, filters: Filters) {
-  const syllables = estimateSyllables(word);
+function matchesSyllableRange(entry: string | WordEntry, filters: Filters) {
+  const syllables = typeof entry === "string" ? estimateSyllables(entry) : entry.syllables;
   const minSyllables = Math.min(filters.minSyllables, filters.maxSyllables);
   const maxSyllables = Math.max(filters.minSyllables, filters.maxSyllables);
   return syllables >= minSyllables && syllables <= maxSyllables;
@@ -120,6 +116,60 @@ function matchesSyllableRange(word: string, filters: Filters) {
 
 function normalizedLetters(word: string) {
   return word.toLowerCase().replace(/[^a-z]/g, "");
+}
+
+const SYLLABLE_EXCEPTIONS: Record<string, number> = {
+  aisle: 1,
+  business: 2,
+  camera: 3,
+  chocolate: 2,
+  choir: 1,
+  colonel: 2,
+  different: 3,
+  every: 2,
+  family: 3,
+  fire: 1,
+  hour: 1,
+  interesting: 3,
+  iron: 2,
+  poem: 2,
+  poet: 2,
+  queue: 1,
+  quiet: 2,
+  rhythm: 2,
+  science: 2,
+  sour: 1,
+  squirrel: 1,
+  vegetable: 4,
+  wednesday: 2,
+};
+
+function estimatePhraseSyllables(value: string) {
+  const words = value.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  if (!words.length) return 1;
+  return Math.max(1, words.reduce((total, word) => total + estimateWordSyllables(word), 0));
+}
+
+function estimateWordSyllables(word: string) {
+  const normalized = normalizedLetters(word);
+  if (!normalized) return 1;
+  if (SYLLABLE_EXCEPTIONS[normalized]) return SYLLABLE_EXCEPTIONS[normalized];
+  if (normalized.length <= 3) return 1;
+
+  let working = normalized;
+  if (working.endsWith("es") && /(?:ches|shes|xes|zes|ses)$/.test(working)) {
+    working = working.slice(0, -2);
+  } else if (working.endsWith("ed") && !/[td]ed$/.test(working)) {
+    working = working.slice(0, -2);
+  } else if (working.endsWith("e") && !/[aeiouy]le$/.test(working) && !/(?:ue|ye)$/.test(working)) {
+    working = working.slice(0, -1);
+  }
+
+  let count = working.match(/[aeiouy]+/g)?.length ?? 1;
+  if (/(?:ia|io|eo|iu)$/.test(working)) count += 1;
+  if (/[^aeiou]le$/.test(normalized)) count += 1;
+  if (/ism$/.test(normalized)) count += 1;
+  return Math.max(1, count);
 }
 
 function reject(reason: FilterRejectReason): FilterEvaluation {

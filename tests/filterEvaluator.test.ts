@@ -13,6 +13,9 @@ function entry(overrides: Partial<WordEntry> = {}): WordEntry {
     pos: "noun",
     alternatePos: [],
     baseForm: word,
+    lemma: word,
+    familyKey: word,
+    syllables: estimateSyllables(word),
     posSource: "override",
     posConfidence: 100,
     commonness: "common",
@@ -62,6 +65,9 @@ describe("filterEvaluator", () => {
       reason: "pattern",
     });
     expect(estimateSyllables("harbor")).toBe(2);
+    expect(estimateSyllables("hour")).toBe(1);
+    expect(estimateSyllables("rhythm")).toBe(2);
+    expect(estimateSyllables("custom beta")).toBe(4);
   });
 });
 

@@ -9,6 +9,7 @@ import type {
   Filters,
   GeneratedSet,
 } from "../types";
+import { estimateSyllables } from "../services/filterEvaluator";
 import { posLabel, posShort, posSourceLabel, semanticStrengthLabel } from "../utils/appUi";
 
 export function DiagnosticsView({
@@ -40,6 +41,11 @@ export function DiagnosticsView({
   const lowConfidenceCount = generatedEntries.filter(({ entry }) => entry.posConfidence < 70).length;
   const datamuseOnlyCount = generatedEntries.filter(({ entry }) => entry.source === "datamuse").length;
   const semanticOutputCount = generatedEntries.filter(({ entry }) => entry.semanticScore).length;
+  const lemmaVariantCount = generatedEntries.filter(({ entry }) => entryLemma(entry) !== entry.word).length;
+  const averageSyllables =
+    generatedEntries.length > 0
+      ? generatedEntries.reduce((total, { entry }) => total + entrySyllables(entry), 0) / generatedEntries.length
+      : 0;
   const normalizedQuery = query.trim().toLowerCase();
   const filteredEntries = generatedEntries.filter(({ entry }) => {
     if (rowFilter === "low-confidence" && entry.posConfidence >= 70) return false;
@@ -50,6 +56,9 @@ export function DiagnosticsView({
     return [
       entry.word,
       entry.baseForm,
+      entryLemma(entry),
+      entryFamilyKey(entry),
+      String(entrySyllables(entry)),
       entry.pos,
       entry.alternatePos.join(" "),
       entry.frequencyBand,
@@ -77,6 +86,8 @@ export function DiagnosticsView({
         <MetricCard label="Themed output" value={semanticOutputCount.toLocaleString()} detail={`${semanticStats.datamuseOnly.toLocaleString()} Datamuse-only candidates`} />
         <MetricCard label="Low POS confidence" value={lowConfidenceCount.toLocaleString()} detail="< 70% confidence" />
         <MetricCard label="Datamuse-only output" value={datamuseOnlyCount.toLocaleString()} detail="not in local SQLite" />
+        <MetricCard label="Lemma variants" value={lemmaVariantCount.toLocaleString()} detail="word differs from lemma" />
+        <MetricCard label="Avg syllables" value={averageSyllables.toFixed(1)} detail="stored per word" />
       </div>
 
       {warnings.length > 0 && (
@@ -193,6 +204,8 @@ export function DiagnosticsView({
                   <tr>
                     <th>Set</th>
                     <th>Word</th>
+                    <th>Lemma</th>
+                    <th>Syllables</th>
                     <th>POS</th>
                     <th>POS Basis</th>
                     <th>Quality</th>
@@ -208,6 +221,11 @@ export function DiagnosticsView({
                         <strong>{entry.word}</strong>
                         {entry.baseForm !== entry.word && <span>base {entry.baseForm}</span>}
                       </td>
+                      <td>
+                        <strong>{entryLemma(entry)}</strong>
+                        <span>family {entryFamilyKey(entry)}</span>
+                      </td>
+                      <td>{entrySyllables(entry)}</td>
                       <td>
                         <small className={`pos pos-${entry.pos}`}>{posShort(entry.pos)}</small>
                         {(entry.alternatePos?.length ?? 0) > 0 && <span>also {entry.alternatePos.map(posShort).join("/")}</span>}
@@ -251,4 +269,16 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
       <small>{detail}</small>
     </article>
   );
+}
+
+function entryLemma(entry: { lemma?: string; baseForm: string; word: string }) {
+  return entry.lemma || entry.baseForm || entry.word;
+}
+
+function entryFamilyKey(entry: { familyKey?: string; lemma?: string; baseForm: string; word: string }) {
+  return entry.familyKey || entryLemma(entry).toLowerCase().replace(/[^a-z]/g, "");
+}
+
+function entrySyllables(entry: { syllables?: number; word: string }) {
+  return entry.syllables ?? estimateSyllables(entry.word);
 }

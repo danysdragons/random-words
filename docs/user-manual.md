@@ -130,9 +130,9 @@ Examples:
 
 ### Syllables
 
-Use **Syllables (approx.)** to target shorter, punchier words or longer, more elaborate words.
+Use **Syllables** to target shorter, punchier words or longer, more elaborate words.
 
-Syllable counts are estimated from vowel groups, so they are useful for broad shaping rather than pronunciation-perfect filtering.
+Local database words use syllable counts computed during the data build. Datamuse-only and manually added words use the app's runtime estimator. These counts are still intended for broad shaping rather than pronunciation-perfect filtering.
 
 ### Duplicate Control
 
@@ -140,7 +140,7 @@ Duplicate control determines how strictly generated sets avoid repeats:
 
 - **Allow repeats:** allows the same word to appear in different generated sets when weighting brings it up again.
 - **Unique words:** prevents the exact same word from repeating across generated sets.
-- **Unique families:** prevents exact repeats and close root-family repeats such as inflected forms. This is the default.
+- **Unique families:** prevents exact repeats and close lemma/family repeats such as inflected forms. This is the default.
 
 ### Exclude Offensive Words
 
@@ -259,7 +259,7 @@ Word tiles show:
 - A short part-of-speech badge.
 - A tooltip with a definition when available, or a clear no-definition fallback with metadata.
 
-Definitions are loaded from Datamuse and cached locally in your browser. Hover or focus a word tile to view the tooltip. When Datamuse does not return a definition for the word's current part of speech, the tooltip still explains that no definition is available and shows source, frequency, POS basis, confidence, and semantic provenance.
+Definitions are loaded from Datamuse and cached locally in your browser. Hover or focus a word tile to view the tooltip. The app tries the visible word, lemma, and base form, and it can fall back to a definition from another part of speech before showing the no-definition message. When no definition is available, the tooltip still shows source, frequency, POS basis, confidence, and semantic provenance.
 
 Turn on **Settings -> Show word details** to show additional data-quality metadata on each tile:
 
@@ -359,13 +359,13 @@ Pinned and manual words are labeled inline in text exports.
 
 ## Diagnostics
 
-The **Diagnostics** view explains the currently generated output. It shows summary counts, active generation rules, quality gates, and row-level metadata for each generated word.
+The **Diagnostics** view explains the currently generated output. It shows summary counts, active generation rules, quality gates, lemma/family metadata, syllable counts, and row-level metadata for each generated word.
 
 Warnings appear in the generator and Diagnostics view when the current output looks constrained or potentially surprising, such as a very small filtered pool, smaller-than-requested generated sets, no semantic matches for a theme, or themed output that mostly used general fallback words.
 
 Use the diagnostics search box and row filter buttons to narrow the visible rows.
 
-Click **Export diagnostics** to download the currently visible diagnostics rows. Diagnostics export supports JSON, CSV, and text formats. The export includes the active diagnostics row filter, search query, criteria metadata, semantic summary counts, and row-level word metadata such as POS source, confidence, frequency band, quality score, source, semantic strength, pinned state, and manual state.
+Click **Export diagnostics** to download the currently visible diagnostics rows. Diagnostics export supports JSON, CSV, and text formats. The export includes the active diagnostics row filter, search query, criteria metadata, semantic summary counts, and row-level word metadata such as lemma, family key, syllables, POS source, confidence, frequency band, quality score, source, semantic strength, pinned state, and manual state.
 
 ## Saved Sets
 

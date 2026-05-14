@@ -1,5 +1,6 @@
 import { POS_OPTIONS } from "../constants";
 import type { Collection, GeneratedSet, PartOfSpeech, SavedSet, WordEntry } from "../types";
+import { estimateSyllables } from "./filterEvaluator";
 import {
   arrayValue,
   boundedNumber,
@@ -95,6 +96,9 @@ function normalizeImportedWordEntry(value: unknown): WordEntry | null {
     pos,
     alternatePos: importedPosList(value.alternatePos),
     baseForm: stringValue(value.baseForm).trim() || word,
+    lemma: stringValue(value.lemma).trim() || stringValue(value.baseForm).trim() || word,
+    familyKey: stringValue(value.familyKey).trim() || familyKeyValue(stringValue(value.lemma).trim() || stringValue(value.baseForm).trim() || word),
+    syllables: boundedNumber(value.syllables, estimateSyllables(word), 1, 24),
     posSource: posSourceValue(value.posSource),
     posConfidence: boundedNumber(value.posConfidence, 30, 0, 100),
     commonness: value.commonness === "rare" ? "rare" : "common",
@@ -108,6 +112,16 @@ function normalizeImportedWordEntry(value: unknown): WordEntry | null {
     pinned: Boolean(value.pinned),
     manual: Boolean(value.manual),
   };
+}
+
+function familyKeyValue(word: string) {
+  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized.length < 5) return normalized;
+  if (normalized.endsWith("ing") && normalized.length > 6) return normalized.slice(0, -3);
+  if (normalized.endsWith("ed") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("es") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("s") && normalized.length > 5) return normalized.slice(0, -1);
+  return normalized;
 }
 
 function importedPosList(value: unknown): PartOfSpeech[] {

@@ -337,8 +337,27 @@ test("classifies common inflected verb forms as verbs", async () => {
   ]);
 
   for (const [word, baseForm] of verbForms) {
-    const result = db.exec("SELECT pos, base_form, pos_source, pos_confidence FROM words WHERE word = ?", [word]);
-    expect(result[0]?.values[0], `${word} POS metadata`).toEqual(["verb", baseForm, "morphology", 80]);
+    const result = db.exec("SELECT pos, base_form, lemma, family_key, pos_source, pos_confidence FROM words WHERE word = ?", [word]);
+    expect(result[0]?.values[0], `${word} POS metadata`).toEqual(["verb", baseForm, baseForm, baseForm, "morphology", 80]);
+  }
+
+  db.close();
+});
+
+test("stores data-quality syllable and family metadata", async () => {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(readFileSync("public/data/words.sqlite"));
+  const expected = new Map([
+    ["hour", ["hour", "hour", 1]],
+    ["fire", ["fire", "fire", 1]],
+    ["rhythm", ["rhythm", "rhythm", 2]],
+    ["families", ["family", "family", 3]],
+    ["happier", ["happy", "happy", 2]],
+  ]);
+
+  for (const [word, metadata] of expected) {
+    const result = db.exec("SELECT lemma, family_key, syllables FROM words WHERE word = ?", [word]);
+    expect(result[0]?.values[0], `${word} quality metadata`).toEqual(metadata);
   }
 
   db.close();

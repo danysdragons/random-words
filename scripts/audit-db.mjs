@@ -22,7 +22,9 @@ if (!existsSync(DB_PATH)) {
         SUM(alternate_pos != '') AS alternate_pos_entries,
         SUM(acronym_hint) AS acronym_hints,
         SUM(proper_noun_hint) AS proper_noun_hints,
-        SUM(offensive_hint) AS offensive_hints
+        SUM(offensive_hint) AS offensive_hints,
+        COUNT(DISTINCT family_key) AS family_keys,
+        SUM(lemma != word) AS lemma_variants
       FROM words
     `,
   );
@@ -50,6 +52,29 @@ if (!existsSync(DB_PATH)) {
       FROM words
       GROUP BY pos_source
       ORDER BY records DESC
+    `,
+  );
+
+  section("Syllable Distribution");
+  printRows(
+    db,
+    `
+      SELECT syllables, COUNT(*) AS records, ROUND(AVG(quality_score), 1) AS avg_quality
+      FROM words
+      GROUP BY syllables
+      ORDER BY syllables
+    `,
+  );
+
+  section("Lemma And Family Examples");
+  printRows(
+    db,
+    `
+      SELECT word, pos, base_form, lemma, family_key, syllables, quality_score
+      FROM words
+      WHERE lemma != word OR base_form != word
+      ORDER BY quality_score DESC, word
+      LIMIT 120
     `,
   );
 

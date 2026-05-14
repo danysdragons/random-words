@@ -1,5 +1,5 @@
 import { normalizePos } from "./data";
-import { passesEntryFilters } from "./services/filterEvaluator";
+import { estimateSyllables, passesEntryFilters } from "./services/filterEvaluator";
 import type { Filters, WordEntry } from "./types";
 
 interface DatamuseWord {
@@ -11,7 +11,7 @@ interface DatamuseWord {
 }
 
 const CACHE_KEY = "random-words:datamuse-cache:v5";
-const DEFINITION_CACHE_KEY = "random-words:definition-cache:v2";
+const DEFINITION_CACHE_KEY = "random-words:definition-cache:v3";
 const MAX_CACHE_ITEMS = 80;
 const MAX_DEFINITION_CACHE_ITEMS = 600;
 
@@ -88,21 +88,7 @@ export async function fetchDefinitions(entries: WordEntry[]): Promise<Record<str
   const resolved: Record<string, string> = {};
 
   for (const requested of missing.slice(0, 80)) {
-    const word = requested.word.trim().toLowerCase();
-    const params = new URLSearchParams({
-      sp: word,
-      qe: "sp",
-      md: "d",
-      max: "1",
-    });
-    try {
-      const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`);
-      if (!response.ok) continue;
-      const [entry] = (await response.json()) as DatamuseWord[];
-      cache[definitionCacheKey(requested)] = formatDefinition(entry, requested);
-    } catch {
-      cache[definitionCacheKey(requested)] = "";
-    }
+    cache[definitionCacheKey(requested)] = await fetchDefinition(requested);
   }
 
   trimDefinitionCache(cache);
@@ -131,6 +117,9 @@ function toEntry(item: DatamuseWord, index: number): WordEntry | null {
     pos: normalizePos(posTag ?? "other"),
     alternatePos: [],
     baseForm: word,
+    lemma: word,
+    familyKey: runtimeFamilyKey(word),
+    syllables: estimateSyllables(word),
     posSource: "datamuse",
     posConfidence: posTag ? 85 : 35,
     commonness: "common",
@@ -142,6 +131,16 @@ function toEntry(item: DatamuseWord, index: number): WordEntry | null {
     frequencyBand: "semantic",
     isPhrase: word.includes(" "),
   };
+}
+
+function runtimeFamilyKey(word: string) {
+  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized.length < 5) return normalized;
+  if (normalized.endsWith("ing") && normalized.length > 6) return normalized.slice(0, -3);
+  if (normalized.endsWith("ed") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("es") && normalized.length > 5) return normalized.slice(0, -2);
+  if (normalized.endsWith("s") && normalized.length > 5) return normalized.slice(0, -1);
+  return normalized;
 }
 
 function datamuseQuality(score: number) {
@@ -243,14 +242,47 @@ function dedupeDefinitionEntries(entries: WordEntry[]) {
 
 function definitionCacheKey(entry: WordEntry | string) {
   if (typeof entry === "string") return `${entry}|other|${entry}`;
-  return `${entry.word}|${entry.pos}|${entry.baseForm || entry.word}`;
+  return `${entry.word}|${entry.pos}|${entry.lemma || entry.baseForm || entry.word}|${entry.baseForm || entry.word}`;
 }
 
-function formatDefinition(entry: DatamuseWord | undefined, requested: WordEntry) {
+async function fetchDefinition(requested: WordEntry) {
+  for (const lookupWord of definitionLookupWords(requested)) {
+    const params = new URLSearchParams({
+      sp: lookupWord,
+      qe: "sp",
+      md: "d",
+      max: "1",
+    });
+    try {
+      const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`);
+      if (!response.ok) continue;
+      const [entry] = (await response.json()) as DatamuseWord[];
+      const definition = formatDefinition(entry, requested, lookupWord);
+      if (definition) return definition;
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function definitionLookupWords(entry: WordEntry) {
+  return [
+    entry.word,
+    entry.lemma,
+    entry.baseForm,
+  ]
+    .map((value) => value?.trim().toLowerCase())
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function formatDefinition(entry: DatamuseWord | undefined, requested: WordEntry, lookupWord = requested.word) {
   const definition = selectDefinition(entry, requested);
   if (!definition) return "";
   const [, text = definition] = definition.split("\t");
-  const headword = entry?.defHeadword && entry.defHeadword !== requested.word ? `${entry.defHeadword}: ` : "";
+  const displayedHeadword = entry?.defHeadword || lookupWord;
+  const headword = displayedHeadword && displayedHeadword !== requested.word ? `${displayedHeadword}: ` : "";
   return `${headword}${text}`;
 }
 
@@ -259,7 +291,6 @@ function selectDefinition(entry: DatamuseWord | undefined, requested: WordEntry)
   const targetTag = definitionPosTag(requested.pos);
   const matching = targetTag ? entry.defs.find((definition) => definition.startsWith(`${targetTag}\t`)) : "";
   if (matching) return matching;
-  if (requested.posSource === "morphology") return "";
   return entry.defs[0] ?? "";
 }
 

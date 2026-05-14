@@ -155,12 +155,139 @@ function inferPosMetadata(word, knownWords = new Map()) {
   if (verbBase) {
     return { pos: "verb", baseForm: verbBase, posSource: "morphology", posConfidence: 80 };
   }
+  const adjectiveBase = degreeLemma(word, knownWords);
+  if (adjectiveBase) {
+    return { pos: "adjective", baseForm: adjectiveBase, posSource: "morphology", posConfidence: 75 };
+  }
   for (const pattern of POS_PATTERNS) {
     if (pattern.re.test(word)) {
       return { pos: pattern.pos, baseForm: word, posSource: "suffix", posConfidence: 55 };
     }
   }
   return { pos: "noun", baseForm: word, posSource: "default", posConfidence: 30 };
+}
+
+function inferLemma(record, knownWords) {
+  const word = record.word;
+  if (record.isPhrase) return word;
+  if (record.pos === "verb" && record.baseForm && record.baseForm !== word) return record.baseForm;
+  if (record.baseForm && record.baseForm !== word && knownWords.has(record.baseForm)) return record.baseForm;
+
+  if (record.pos === "noun") {
+    const singular = singularNounLemma(word, knownWords);
+    if (singular) return singular;
+  }
+  if (record.pos === "adjective" || record.pos === "adverb") {
+    const degree = degreeLemma(word, knownWords);
+    if (degree) return degree;
+  }
+  return word;
+}
+
+function singularNounLemma(word, knownWords) {
+  if (!/^[a-z]+$/.test(word) || word.length < 4) return "";
+  const candidates = [];
+  if (word.endsWith("ies") && word.length > 4) candidates.push(`${word.slice(0, -3)}y`);
+  if (word.endsWith("ves") && word.length > 4) {
+    candidates.push(`${word.slice(0, -3)}f`);
+    candidates.push(`${word.slice(0, -3)}fe`);
+  }
+  if (word.endsWith("ches") || word.endsWith("shes") || word.endsWith("xes") || word.endsWith("zes") || word.endsWith("ses")) {
+    candidates.push(word.slice(0, -2));
+  }
+  if (word.endsWith("s") && !word.endsWith("ss") && word.length > 3) candidates.push(word.slice(0, -1));
+  return candidates.find((candidate) => knownWords.has(candidate)) ?? "";
+}
+
+function degreeLemma(word, knownWords) {
+  if (!/^[a-z]+$/.test(word) || word.length < 5) return "";
+  const candidates = [];
+  if (word.endsWith("iest")) {
+    const candidate = `${word.slice(0, -4)}y`;
+    if (knownWords.has(candidate)) return candidate;
+  }
+  if (word.endsWith("ier")) {
+    const candidate = `${word.slice(0, -3)}y`;
+    if (knownWords.has(candidate)) return candidate;
+  }
+  if (word.endsWith("est")) {
+    const stem = word.slice(0, -3);
+    candidates.push(...adjectiveDegreeCandidates(stem));
+  }
+  if (word.endsWith("er")) {
+    const stem = word.slice(0, -2);
+    candidates.push(...adjectiveDegreeCandidates(stem));
+  }
+  return candidates.find((candidate) => knownWords.has(candidate) && POS_OVERRIDES.get(candidate) === "adjective") ?? "";
+}
+
+function adjectiveDegreeCandidates(stem) {
+  const candidates = [stem, `${stem}e`];
+  if (hasDoubledFinalConsonant(stem)) candidates.push(stem.slice(0, -1));
+  return candidates;
+}
+
+function familyKeyFor(record) {
+  const normalized = (record.lemma || record.baseForm || record.word).toLowerCase().replace(/[^a-z]/g, "");
+  if (!normalized) return record.word.toLowerCase().replace(/[^a-z]/g, "");
+  return normalized;
+}
+
+function estimateSyllables(value) {
+  const words = value.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  if (!words.length) return 1;
+  return Math.max(1, words.reduce((total, word) => total + estimateWordSyllables(word), 0));
+}
+
+const SYLLABLE_EXCEPTIONS = new Map(
+  Object.entries({
+    aisle: 1,
+    business: 2,
+    camera: 3,
+    chocolate: 2,
+    choir: 1,
+    colonel: 2,
+    different: 3,
+    every: 2,
+    family: 3,
+    fire: 1,
+    hour: 1,
+    interesting: 3,
+    iron: 2,
+    poem: 2,
+    poet: 2,
+    queue: 1,
+    quiet: 2,
+    rhythm: 2,
+    science: 2,
+    sour: 1,
+    squirrel: 1,
+    vegetable: 4,
+    wednesday: 2,
+  }),
+);
+
+function estimateWordSyllables(word) {
+  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (!normalized) return 1;
+  const exception = SYLLABLE_EXCEPTIONS.get(normalized);
+  if (exception) return exception;
+  if (normalized.length <= 3) return 1;
+
+  let working = normalized;
+  if (working.endsWith("es") && /(?:ches|shes|xes|zes|ses)$/.test(working)) {
+    working = working.slice(0, -2);
+  } else if (working.endsWith("ed") && !/[td]ed$/.test(working)) {
+    working = working.slice(0, -2);
+  } else if (working.endsWith("e") && !/[aeiouy]le$/.test(working) && !/(?:ue|ye)$/.test(working)) {
+    working = working.slice(0, -1);
+  }
+
+  let count = working.match(/[aeiouy]+/g)?.length ?? 1;
+  if (/(?:ia|io|eo|iu)$/.test(working)) count += 1;
+  if (/[^aeiou]le$/.test(normalized)) count += 1;
+  if (/ism$/.test(normalized)) count += 1;
+  return Math.max(1, count);
 }
 
 function alternatePos(word, primaryPos) {
@@ -340,6 +467,9 @@ function createDatabase(records, sourceCount) {
         pos TEXT NOT NULL,
         alternate_pos TEXT NOT NULL,
         base_form TEXT NOT NULL,
+        lemma TEXT NOT NULL,
+        family_key TEXT NOT NULL,
+        syllables INTEGER NOT NULL,
         pos_source TEXT NOT NULL,
         pos_confidence INTEGER NOT NULL,
         is_phrase INTEGER NOT NULL,
@@ -361,6 +491,8 @@ function createDatabase(records, sourceCount) {
       CREATE INDEX idx_words_commonness ON words(commonness);
       CREATE INDEX idx_words_pos ON words(pos);
       CREATE INDEX idx_words_alternate_pos ON words(alternate_pos);
+      CREATE INDEX idx_words_family_key ON words(family_key);
+      CREATE INDEX idx_words_syllables ON words(syllables);
       CREATE INDEX idx_words_pos_source ON words(pos_source, pos_confidence);
       CREATE INDEX idx_words_quality ON words(quality_score);
       CREATE INDEX idx_words_shape ON words(is_phrase, has_apostrophe, has_hyphen);
@@ -369,10 +501,10 @@ function createDatabase(records, sourceCount) {
 
     const insert = db.prepare(`
       INSERT INTO words (
-        word, normalized, length, commonness, pos, alternate_pos, base_form, pos_source, pos_confidence, is_phrase, has_apostrophe,
+        word, normalized, length, commonness, pos, alternate_pos, base_form, lemma, family_key, syllables, pos_source, pos_confidence, is_phrase, has_apostrophe,
         has_hyphen, proper_noun_hint, offensive_hint, acronym_hint, frequency_band, quality_score,
         dialect_us, dialect_gb, dialect_ca, dialect_au, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.run("BEGIN TRANSACTION");
@@ -385,6 +517,9 @@ function createDatabase(records, sourceCount) {
         record.pos,
         encodeAlternatePos(record.alternatePos),
         record.baseForm,
+        record.lemma,
+        record.familyKey,
+        record.syllables,
         record.posSource,
         record.posConfidence,
         record.isPhrase ? 1 : 0,
@@ -417,6 +552,9 @@ function createDatabase(records, sourceCount) {
     metadata.run(["pos_morphology", String(records.filter((record) => record.posSource === "morphology").length)]);
     metadata.run(["pos_low_confidence", String(records.filter((record) => record.posConfidence < 60).length)]);
     metadata.run(["pos_alternates", String(records.filter((record) => record.alternatePos.length).length)]);
+    metadata.run(["lemma_entries", String(records.filter((record) => record.lemma !== record.word).length)]);
+    metadata.run(["family_keys", String(new Set(records.map((record) => record.familyKey)).size)]);
+    metadata.run(["syllable_entries", String(records.filter((record) => record.syllables > 0).length)]);
     metadata.run(["frequency_core_words", String(FREQUENCY_BANDS.core.size)]);
     metadata.run(["frequency_familiar_words", String(FREQUENCY_BANDS.familiar.size)]);
     metadata.run(["frequency_niche_penalties", String(FREQUENCY_BANDS.rarePenalty.size)]);
@@ -445,6 +583,9 @@ async function main() {
   for (const record of records.values()) {
     Object.assign(record, inferPosMetadata(record.word, records));
     record.alternatePos = alternatePos(record.word, record.pos);
+    record.lemma = inferLemma(record, records);
+    record.familyKey = familyKeyFor(record);
+    record.syllables = estimateSyllables(record.word);
   }
 
   const sortedRecords = [...records.values()].sort((a, b) => a.word.localeCompare(b.word));
@@ -466,6 +607,9 @@ async function main() {
       posMorphology: sortedRecords.filter((record) => record.posSource === "morphology").length,
       posLowConfidence: sortedRecords.filter((record) => record.posConfidence < 60).length,
       posAlternates: sortedRecords.filter((record) => record.alternatePos.length).length,
+      lemmaEntries: sortedRecords.filter((record) => record.lemma !== record.word).length,
+      familyKeys: new Set(sortedRecords.map((record) => record.familyKey)).size,
+      syllableEntries: sortedRecords.filter((record) => record.syllables > 0).length,
       frequencyCoreWords: FREQUENCY_BANDS.core.size,
       frequencyFamiliarWords: FREQUENCY_BANDS.familiar.size,
       frequencyNichePenalties: FREQUENCY_BANDS.rarePenalty.size,
