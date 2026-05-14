@@ -1,5 +1,6 @@
 import initSqlJs, { Database } from "sql.js";
 import { gunzipSync } from "fflate";
+import { matchesAdvancedWordFilters, normalizedText, uniqueLetters } from "./services/filterEvaluator";
 import type { BuildMeta, Dialect, Filters, PartOfSpeech, WordEntry } from "./types";
 
 export interface WordDatabase {
@@ -128,7 +129,7 @@ export function queryWords(db: Database, filters: Filters): WordEntry[] {
       frequencyBand: String(row[6]),
       isPhrase: false,
     }))
-    .filter((entry) => passesAdvancedFilters(entry.word, filters));
+    .filter((entry) => matchesAdvancedWordFilters(entry.word, filters));
 }
 
 export function localPoolCriteriaKey(filters: Filters) {
@@ -159,43 +160,6 @@ function decodeAlternatePos(value: string): PartOfSpeech[] {
     .filter(Boolean)
     .map(normalizePos)
     .filter((pos) => pos !== "other");
-}
-
-function uniqueLetters(value: unknown) {
-  if (typeof value !== "string") return [];
-  return [...new Set(value.toLowerCase().replace(/[^a-z]/g, "").split(""))];
-}
-
-export function passesAdvancedFilters(word: string, filters: Filters) {
-  if (!matchesWordPattern(word, filters.wordPattern)) return false;
-  const syllables = estimateSyllables(word);
-  const minSyllables = Math.min(filters.minSyllables, filters.maxSyllables);
-  const maxSyllables = Math.max(filters.minSyllables, filters.maxSyllables);
-  return syllables >= minSyllables && syllables <= maxSyllables;
-}
-
-export function estimateSyllables(word: string) {
-  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
-  if (!normalized) return 1;
-  const groups = normalized.match(/[aeiouy]+/g)?.length ?? 1;
-  const silentE = normalized.length > 3 && normalized.endsWith("e") && !/[aeiouy]le$/.test(normalized) ? 1 : 0;
-  return Math.max(1, groups - silentE);
-}
-
-function matchesWordPattern(word: string, pattern: unknown) {
-  const cleanPattern = normalizedText(pattern);
-  if (!cleanPattern) return true;
-  const normalized = word.toLowerCase();
-  const escaped = cleanPattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
-  try {
-    return new RegExp(`^${escaped}$`).test(normalized);
-  } catch {
-    return true;
-  }
-}
-
-function normalizedText(value: unknown) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 function selectedPartOfSpeech(value: unknown): PartOfSpeech[] {

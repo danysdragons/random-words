@@ -1,6 +1,6 @@
 import { normalizePos } from "./data";
+import { passesEntryFilters } from "./services/filterEvaluator";
 import type { Filters, WordEntry } from "./types";
-import { passesAdvancedFilters } from "./data";
 
 interface DatamuseWord {
   word: string;
@@ -10,95 +10,10 @@ interface DatamuseWord {
   defHeadword?: string;
 }
 
-const CACHE_KEY = "random-words:datamuse-cache:v4";
+const CACHE_KEY = "random-words:datamuse-cache:v5";
 const DEFINITION_CACHE_KEY = "random-words:definition-cache:v2";
 const MAX_CACHE_ITEMS = 80;
 const MAX_DEFINITION_CACHE_ITEMS = 600;
-
-const OFFENSIVE_WORDS = new Set([
-  "damn",
-  "hell",
-  "crap",
-]);
-
-const ACRONYM_WORDS = new Set([
-  "aa",
-  "ab",
-  "abc",
-  "ad",
-  "adj",
-  "adv",
-  "afr",
-  "ai",
-  "api",
-  "atm",
-  "bc",
-  "bbl",
-  "bpm",
-  "bps",
-  "cd",
-  "cds",
-  "ceo",
-  "chg",
-  "chm",
-  "cia",
-  "cir",
-  "cpu",
-  "css",
-  "dna",
-  "dns",
-  "dvd",
-  "ems",
-  "eta",
-  "eu",
-  "faq",
-  "fbi",
-  "ftp",
-  "gdp",
-  "gps",
-  "gui",
-  "html",
-  "http",
-  "https",
-  "id",
-  "ip",
-  "iq",
-  "irs",
-  "isbn",
-  "isp",
-  "jpeg",
-  "jpg",
-  "lcd",
-  "led",
-  "llc",
-  "mp3",
-  "nasa",
-  "nato",
-  "nfl",
-  "nhl",
-  "pdf",
-  "pin",
-  "ram",
-  "rna",
-  "rom",
-  "rpm",
-  "sms",
-  "sos",
-  "sql",
-  "tv",
-  "uk",
-  "un",
-  "uri",
-  "url",
-  "usb",
-  "usa",
-  "vat",
-  "vip",
-  "vpn",
-  "vr",
-  "www",
-  "xml",
-]);
 
 export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]> {
   const theme = filters.theme.trim();
@@ -111,7 +26,9 @@ export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]>
     filters.includePhrases ? "phrases" : "words",
     filters.semanticLimit,
   ].join("|");
-  if (cache[key]) return cache[key];
+  if (cache[key]) {
+    return cache[key].filter((entry) => passesEntryFilters(entry, filters, { semanticModeRestrictions: true }));
+  }
 
   const params = new URLSearchParams();
   params.set("max", String(filters.semanticLimit));
@@ -133,7 +50,7 @@ export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]>
   const words = payload
     .map((item, index) => toEntry(item, index))
     .filter((entry): entry is WordEntry => Boolean(entry))
-    .filter((entry) => passesClientFilters(entry, filters));
+    .filter((entry) => passesEntryFilters(entry, filters, { semanticModeRestrictions: true }));
 
   cache[key] = dedupe(words);
   trimCache(cache);
@@ -209,30 +126,6 @@ function datamuseQuality(score: number) {
   return 55;
 }
 
-function passesClientFilters(entry: WordEntry, filters: Filters) {
-  if (!filters.includePhrases && entry.isPhrase) return false;
-  if (entry.length < filters.minLength || entry.length > filters.maxLength) return false;
-  if (filters.selectedPos.length && !filters.selectedPos.includes(entry.pos)) return false;
-  if (filters.semanticMode === "concrete" && entry.pos !== "noun") return false;
-  if (filters.semanticMode === "actions" && entry.pos !== "verb") return false;
-  if (filters.startsWith && !entry.word.startsWith(filters.startsWith.toLowerCase())) return false;
-  if (filters.endsWith && !entry.word.endsWith(filters.endsWith.toLowerCase())) return false;
-  if (filters.noContractions && entry.word.includes("'")) return false;
-  if (filters.noHyphenated && entry.word.includes("-")) return false;
-  if (filters.noAcronyms && isAcronymLike(entry.word)) return false;
-  if (filters.excludeOffensive && OFFENSIVE_WORDS.has(entry.word)) return false;
-  if (!passesAdvancedFilters(entry.word, filters)) return false;
-
-  const normalized = entry.word.replace(/[^a-z]/g, "");
-  for (const letter of filters.contains.toLowerCase().replace(/[^a-z]/g, "")) {
-    if (!normalized.includes(letter)) return false;
-  }
-  for (const letter of filters.excludes.toLowerCase().replace(/[^a-z]/g, "")) {
-    if (normalized.includes(letter)) return false;
-  }
-  return true;
-}
-
 function semanticQuery(filters: Filters) {
   const theme = filters.theme.trim();
   if (filters.semanticMode === "concrete") return `${theme} object thing place material`;
@@ -248,10 +141,6 @@ function semanticTopics(filters: Filters) {
   if (filters.semanticMode === "actions") return `${theme},action,motion`;
   if (filters.semanticMode === "sensory") return `${theme},texture,sound,color,scent,taste`;
   return theme;
-}
-
-function isAcronymLike(word: string) {
-  return ACRONYM_WORDS.has(word.toLowerCase().replace(/[^a-z0-9]/g, ""));
 }
 
 function dedupe(words: WordEntry[]) {

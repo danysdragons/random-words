@@ -403,6 +403,7 @@ function App() {
     localStorage.removeItem("random-words:datamuse-cache:v2");
     localStorage.removeItem("random-words:datamuse-cache:v3");
     localStorage.removeItem("random-words:datamuse-cache:v4");
+    localStorage.removeItem("random-words:datamuse-cache:v5");
     localStorage.removeItem("random-words:definition-cache:v1");
     localStorage.removeItem("random-words:definition-cache:v2");
     setDefinitions({});

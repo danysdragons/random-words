@@ -5,7 +5,7 @@
   "homepage": "https://danysdragons.github.io/random-words/",
   "type": "module",
   "scripts": {
-    "preprocess": "node scripts/build-db.mjs",
+    "preprocess": "node scripts/write-runtime-safety.mjs && node scripts/build-db.mjs",
     "copy:wasm": "node scripts/copy-sql-wasm.mjs",
     "dev": "npm run preprocess && npm run copy:wasm && vite",
     "build": "npm run preprocess && npm run copy:wasm && tsc -b && vite build",

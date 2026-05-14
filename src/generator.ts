@@ -1,6 +1,5 @@
+import { isOffensiveWord } from "./services/safetyMetadata";
 import type { Filters, GeneratedSet, WordEntry } from "./types";
-
-const OFFENSIVE_WORDS = new Set(["damn", "hell", "crap"]);
 
 export function generateSets(
   basePool: WordEntry[],
@@ -100,7 +99,7 @@ function mergeSemantic(basePool: WordEntry[], semanticPool: WordEntry[]) {
 }
 
 function clientSafe(entry: WordEntry, filters: Filters) {
-  if (filters.excludeOffensive && OFFENSIVE_WORDS.has(entry.word)) return false;
+  if (filters.excludeOffensive && isOffensiveWord(entry.word)) return false;
   return true;
 }
 

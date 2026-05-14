@@ -37,14 +37,15 @@ The core design choices are:
 | Area | Main Files | Responsibility |
 | --- | --- | --- |
 | App shell and UI | `src/App.tsx`, `src/styles.css` | React state, controls, views, modals, sharing, exporting, local persistence |
-| Static DB loading and filtering | `src/data.ts` | Load compressed `words.sqlite.gz` with raw SQLite fallback, load build metadata, translate filters into SQL queries |
-| Semantic and definition lookup | `src/datamuse.ts` | Datamuse requests, semantic mode mapping, client-side semantic filtering, local cache |
+| Static DB loading and filtering | `src/data.ts`, `src/services/filterEvaluator.ts` | Load compressed `words.sqlite.gz` with raw SQLite fallback, load build metadata, translate broad filters into SQL queries, apply shared client-side filters |
+| Semantic and definition lookup | `src/datamuse.ts`, `src/services/filterEvaluator.ts` | Datamuse requests, semantic mode mapping, shared client-side semantic filtering, local cache |
 | Generation algorithm | `src/generator.ts` | Seeded random generation, semantic/base pool blending, quality weighting, duplicate-family reduction |
+| Runtime safety metadata | `src/services/safetyMetadata.ts`, `src/generated/safety-metadata.json` | Use generated offensive-word and acronym/initialism metadata in runtime filters |
 | Shared types | `src/types.ts` | Filter, word, saved set, collection, metadata, semantic mode, quality mode definitions |
-| DB preprocessing | `scripts/build-db.mjs` | Download wordlists, normalize entries, infer metadata, build SQLite artifact and build metadata |
+| DB preprocessing | `scripts/write-runtime-safety.mjs`, `scripts/build-db.mjs` | Generate compact runtime safety metadata, download wordlists, normalize entries, infer metadata, build SQLite artifact and build metadata |
 | DB auditing | `scripts/audit-db.mjs` | Inspect generated database quality buckets and targeted watchlists |
 | WASM copying | `scripts/copy-sql-wasm.mjs` | Copy `sql.js` WASM into `public/` for Vite/GitHub Pages |
-| Unit tests | `tests/*.test.ts`, `vitest.config.ts` | Fast coverage for extracted share, export, and import services |
+| Unit tests | `tests/*.test.ts`, `vitest.config.ts` | Fast coverage for extracted services, shared filter semantics, and import/export behavior |
 | Smoke tests | `tests/smoke.spec.ts` | Browser-level coverage for load, generation, POS filtering, sharing |
 | Deployment | `.github/workflows/pages.yml`, `vite.config.ts` | GitHub Pages workflow and base path behavior |
 | User documentation | `docs/user-manual.md` | User-facing operation guide |
@@ -56,7 +57,10 @@ The build-time pipeline converts external SCOWL/ESDB wordlists plus curated qual
 ```mermaid
 flowchart TD
   Start["npm run build"]
-  Preprocess["npm run preprocess<br/>scripts/build-db.mjs"]
+  Preprocess["npm run preprocess"]
+  SafetyScript["scripts/write-runtime-safety.mjs"]
+  RuntimeSafety["Runtime safety metadata<br/>src/generated/safety-metadata.json"]
+  BuildDb["scripts/build-db.mjs"]
   Download["Download pinned SCOWL/ESDB ZIPs<br/>data/raw/scowl"]
   QualityJson["Curated quality metadata<br/>data/quality/word-quality.json"]
   Normalize["Normalize words<br/>lowercase, NFKC, punctuation flags"]
@@ -70,7 +74,11 @@ flowchart TD
   Dist["dist/ static site"]
 
   Start --> Preprocess
-  Preprocess --> Download
+  Preprocess --> SafetyScript
+  Preprocess --> BuildDb
+  QualityJson --> SafetyScript
+  SafetyScript --> RuntimeSafety
+  BuildDb --> Download
   QualityJson --> Enrich
   Download --> Normalize
   Normalize --> Enrich
@@ -78,6 +86,7 @@ flowchart TD
   SQLite --> SQLiteGzip
   Enrich --> Meta
   Start --> CopyWasm
+  RuntimeSafety --> Typecheck
   SQLiteGzip --> Typecheck
   Meta --> Typecheck
   CopyWasm --> Typecheck
@@ -96,6 +105,8 @@ The curated local source is `data/quality/word-quality.json`, which contains:
 - `offensiveWords`
 - `acronymWords`
 - `frequencyBands`
+
+`scripts/write-runtime-safety.mjs` converts the offensive-word and acronym/initialism lists into `src/generated/safety-metadata.json`. Runtime code reads that generated artifact through `src/services/safetyMetadata.ts`, so the build pipeline and browser filters use the same curated safety source instead of maintaining duplicate hard-coded lists.
 
 ### Normalization
 
@@ -296,6 +307,8 @@ Optional filters apply:
 
 The SQL result is ordered by `quality_score DESC, word`, then converted into `WordEntry[]`. Pattern and syllable filters are applied after SQL conversion because they use app-level matching logic rather than database columns.
 
+The shared `src/services/filterEvaluator.ts` module owns client-side entry filtering for both local database rows and Datamuse rows. It returns an `ok` flag plus a stable rejection reason, which keeps static and semantic filtering aligned and gives diagnostics future access to explanations such as pattern, syllable, POS, acronym, or safety rejection.
+
 ## Semantic Expansion Flow
 
 Semantic expansion is optional. It only runs when `filters.theme.trim()` is non-empty.
@@ -313,7 +326,7 @@ sequenceDiagram
   else cache miss
     App->>DM: GET /words with mode-specific params
     DM-->>App: DatamuseWord[]
-    App->>Filter: normalize, infer POS, apply filters including pattern and syllables
+    App->>Filter: normalize, infer POS, apply shared filters including pattern and syllables
     Filter-->>Cache: store deduped WordEntry[]
     Cache-->>App: WordEntry[]
   end
@@ -328,7 +341,7 @@ sequenceDiagram
 - Phrase inclusion flag
 - Semantic candidate limit
 
-The cache is stored under `random-words:datamuse-cache:v1`.
+The cache is stored under `random-words:datamuse-cache:v5`. Cached semantic entries are still passed through the shared filter evaluator on read, so changed filters or safety metadata are enforced even when Datamuse results came from local storage.
 
 ### Semantic Modes
 
@@ -345,7 +358,7 @@ Semantic modes map to Datamuse parameters and client-side filtering:
 | `actions` | Meaning-like query expanded with action/motion terms | Keep semantic entries tagged as verbs |
 | `sensory` | Meaning-like query expanded with sensory terms | None |
 
-Semantic entries are normalized into the same `WordEntry` shape as database rows.
+Semantic entries are normalized into the same `WordEntry` shape as database rows, then passed through the same filter evaluator used by local database entries. Semantic-mode-specific restrictions, such as noun-only concrete results and verb-only action results, are enabled through evaluator options rather than duplicated in Datamuse-specific code.
 
 ## Generation Flow
 
@@ -738,10 +751,10 @@ Tradeoff: themed generation depends on network access, Datamuse availability, an
 
 The current architecture leaves clear extension points:
 
-- Add new filter fields in `Filters`, `DEFAULT_FILTERS`, `queryWords`, share-link validation, and export criteria.
+- Add new filter fields in `Filters`, `DEFAULT_FILTERS`, `queryWords`, `src/services/filterEvaluator.ts`, share-link validation, and export criteria.
 - Add new semantic modes in `SemanticMode`, `MODE_LABELS`, `datamuse.ts`, and `generator.ts`.
 - Add or reorganize theme presets in `THEME_PRESET_GROUPS`; each preset can apply theme text, semantic mode, and optional phrase behavior.
-- Add new quality metadata in `data/quality/word-quality.json` and `scripts/build-db.mjs`.
+- Add new quality metadata in `data/quality/word-quality.json`, `scripts/write-runtime-safety.mjs` when it affects runtime safety lists, and `scripts/build-db.mjs`.
 - Add new audit checks in `scripts/audit-db.mjs`.
 - Add new saved-set organization behavior in `SavedSet`, `Collection`, and the saved/collection views.
 - Add backend sync later without disturbing the local-first model by treating local storage as the offline cache.
