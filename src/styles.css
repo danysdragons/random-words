@@ -285,6 +285,39 @@ select:focus-visible,
   flex-direction: column;
 }
 
+.error-boundary {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--app-bg);
+  color: var(--body);
+}
+
+.error-boundary > div {
+  width: min(560px, 100%);
+  padding: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 18px 54px var(--modal-shadow);
+}
+
+.error-boundary strong {
+  color: var(--heading);
+  font-size: 18px;
+}
+
+.error-boundary button {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-weight: 800;
+}
+
 .topbar {
   height: 58px;
   display: flex;

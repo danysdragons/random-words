@@ -39,9 +39,11 @@ npm run audit:data
 npm run report:data
 npm run test:unit
 CI=true npm run test:smoke
+npm run test:smoke:preview
 ```
 
 The build step writes both `public/data/words.sqlite` and `public/data/words.sqlite.gz`. The deployed app prefers the compressed artifact and falls back to the raw SQLite file when needed.
+CI runs smoke tests against `vite preview` after building, so the deployed static artifact is exercised before upload.
 
 ## Deployment
 
@@ -52,6 +54,7 @@ The Vite base path is derived from `GITHUB_REPOSITORY` during Actions builds, so
 ## Data
 
 - Primary source: SCOWL/ESDB `2026.02.25`
+- Source ZIPs are verified with pinned SHA-256 checksums during preprocessing.
 - Runtime semantic expansion: Datamuse API, cached in browser local storage
 - SQLite runtime: `sql.js`
 - Generated artifacts: `words.sqlite`, `words.sqlite.gz`, `build-meta.json`, and `sql-wasm.wasm`

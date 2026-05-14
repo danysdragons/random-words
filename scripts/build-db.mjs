@@ -1,5 +1,6 @@
 import initSqlJs from "sql.js";
 import { gzipSync, unzipSync, strFromU8 } from "fflate";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -54,6 +55,18 @@ SOURCE_PACKAGES.splice(
   },
 );
 
+const SOURCE_SHA256 = {
+  "wordlist-en_AU-2026.02.25.zip": "93295124db43eba58f5257d7e17865930e8ad3696a849d6a366ec9ae9f7da20a",
+  "wordlist-en_AU-large-2026.02.25.zip": "d44583607b08dd4f807bc96dc50d8703e308159af04f321327674e3809057cb9",
+  "wordlist-en_CA-2026.02.25.zip": "775d01fdd60e86f8f9e48da75b1cd3caa02c677b39629644b9bd4f3af42f820b",
+  "wordlist-en_CA-large-2026.02.25.zip": "45dc06779770c69865c61a2c3c347dde045fa60c5392a1b03d0db6521f32d0db",
+  "wordlist-en_GB-ise-2026.02.25.zip": "7ddd492ebb697bd231be0c2df3343d11b9000284db2a0d73760085d9293ff625",
+  "wordlist-en_GB-ize-2026.02.25.zip": "6cdd7909aa271a54dbd6a3230690589c4c56b0878c8abb00d2f6c4249e91be3d",
+  "wordlist-en_GB-large-2026.02.25.zip": "1d99f36a8eb409bb2a8880f2df00afad0f2d5ef8c75e3ab1cf8ab50aed6c5249",
+  "wordlist-en_US-2026.02.25.zip": "caeb6ee8a38e98ccbd6e5c717889a1bab68073dcba8a9c0ca6570641926913e9",
+  "wordlist-en_US-large-2026.02.25.zip": "c2ba43fe14ca790b3eac8c8e4423b57d373a04483e89c541323569df00752c8c",
+};
+
 const POS_PATTERNS = [
   { pos: "adverb", re: /ly$/ },
   { pos: "adjective", re: /(able|ible|al|ful|ic|ish|ive|less|ous|y)$/ },
@@ -95,8 +108,12 @@ function sourceUrl(pkg) {
   return `${SOURCE_BASE}/${fileName}/download`;
 }
 
-async function download(url, target) {
-  if (existsSync(target)) return;
+async function download(pkg, target) {
+  if (existsSync(target)) {
+    verifySourceChecksum(pkg, target);
+    return;
+  }
+  const url = sourceUrl(pkg);
   console.log(`Downloading ${url}`);
   const response = await fetch(url);
   if (!response.ok) {
@@ -104,6 +121,17 @@ async function download(url, target) {
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
   writeFileSync(target, bytes);
+  verifySourceChecksum(pkg, target);
+}
+
+function verifySourceChecksum(pkg, target) {
+  const fileName = `${pkg.fileStem}.zip`;
+  const expected = SOURCE_SHA256[fileName];
+  if (!expected) throw new Error(`Missing SHA-256 checksum for ${fileName}`);
+  const actual = createHash("sha256").update(readFileSync(target)).digest("hex");
+  if (actual !== expected) {
+    throw new Error(`Checksum mismatch for ${fileName}. Expected ${expected}, got ${actual}.`);
+  }
 }
 
 function normalizeWord(word) {
@@ -404,7 +432,7 @@ async function main() {
 
   for (const pkg of SOURCE_PACKAGES) {
     const fileName = `${pkg.fileStem}.zip`;
-    await download(sourceUrl(pkg), resolve(RAW_DIR, fileName));
+    await download(pkg, resolve(RAW_DIR, fileName));
   }
 
   const records = new Map();

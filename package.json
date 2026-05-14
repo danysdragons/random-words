@@ -14,7 +14,8 @@
     "audit:data": "node scripts/audit-db.mjs",
     "report:data": "node scripts/write-data-quality-report.mjs",
     "test:unit": "vitest run",
-    "test:smoke": "playwright test"
+    "test:smoke": "playwright test",
+    "test:smoke:preview": "PLAYWRIGHT_SERVER=preview playwright test"
   },
   "keywords": [
     "words",

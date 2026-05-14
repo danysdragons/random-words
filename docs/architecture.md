@@ -63,7 +63,8 @@ flowchart TD
   SafetyScript["scripts/write-runtime-safety.mjs"]
   RuntimeSafety["Runtime safety metadata<br/>src/generated/safety-metadata.json"]
   BuildDb["scripts/build-db.mjs"]
-  Download["Download pinned SCOWL/ESDB ZIPs<br/>data/raw/scowl"]
+  Download["Download or reuse pinned SCOWL/ESDB ZIPs<br/>data/raw/scowl"]
+  Checksum["Verify source ZIP SHA-256 checksums"]
   QualityJson["Curated quality metadata<br/>data/quality/word-quality.json"]
   Normalize["Normalize words<br/>lowercase, NFKC, punctuation flags"]
   Enrich["Infer and attach metadata<br/>POS, dialects, commonness, hints, frequency band, quality score"]
@@ -81,8 +82,9 @@ flowchart TD
   QualityJson --> SafetyScript
   SafetyScript --> RuntimeSafety
   BuildDb --> Download
+  Download --> Checksum
   QualityJson --> Enrich
-  Download --> Normalize
+  Checksum --> Normalize
   Normalize --> Enrich
   Enrich --> SQLite
   SQLite --> SQLiteGzip
@@ -99,6 +101,7 @@ flowchart TD
 ### Inputs
 
 The primary external source is SCOWL/ESDB version `2026.02.25`, downloaded by `scripts/build-db.mjs`.
+Each expected source ZIP has a pinned SHA-256 checksum in the build script. Cached and newly downloaded ZIPs are verified before extraction so a corrupt cache or changed upstream artifact fails the build instead of silently changing the generated database.
 
 The curated local source is `data/quality/word-quality.json`, which contains:
 
@@ -322,13 +325,18 @@ sequenceDiagram
 
   App->>Cache: Lookup cache key(theme, mode, phrase flag, limit)
   alt cache hit
-    Cache-->>App: WordEntry[]
+    Cache-->>App: Filtered WordEntry[]
   else cache miss
     App->>DM: GET /words with mode-specific params
-    DM-->>App: DatamuseWord[]
-    App->>Filter: normalize, infer POS, apply shared filters including pattern and syllables
-    Filter-->>Cache: store deduped WordEntry[]
-    Cache-->>App: WordEntry[]
+    alt Datamuse available
+      DM-->>App: DatamuseWord[]
+      App->>Filter: normalize, infer POS, apply shared filters including pattern and syllables
+      Filter-->>Cache: store deduped WordEntry[]
+      Cache-->>App: WordEntry[]
+    else Datamuse unavailable
+      App->>Cache: Find compatible cached theme result
+      Cache-->>App: Cached WordEntry[] or empty local-only fallback warning
+    end
   end
 ```
 
@@ -342,6 +350,8 @@ sequenceDiagram
 - Semantic candidate limit
 
 The cache is stored under `random-words:datamuse-cache:v5`. Cached semantic entries are still passed through the shared filter evaluator on read, so changed filters or safety metadata are enforced even when Datamuse results came from local storage.
+
+If a Datamuse request fails, `src/datamuse.ts` returns a structured lookup result rather than throwing the generation path. It first tries a compatible cached semantic result for the same theme, semantic mode, and phrase setting. If no cached result exists, generation continues with the local SQLite pool and a visible warning.
 
 ### Semantic Modes
 
@@ -644,10 +654,12 @@ flowchart TD
   Checkout["Checkout"]
   Node["Setup Node 22<br/>npm cache"]
   Install["npm ci"]
-  Browser["Install Playwright Chromium"]
+  Check["npm run check"]
   Unit["npm run test:unit"]
-  Smoke["CI=true npm run test:smoke"]
   Build["npm run build"]
+  Audit["npm run audit:data"]
+  Browser["Install Playwright Chromium"]
+  Smoke["CI=true npm run test:smoke:preview"]
   Upload["Upload dist artifact"]
   Deploy["Deploy Pages"]
   Pages["GitHub Pages site"]
@@ -656,18 +668,20 @@ flowchart TD
   Actions --> Checkout
   Checkout --> Node
   Node --> Install
-  Install --> Browser
-  Browser --> Unit
-  Unit --> Smoke
-  Smoke --> Build
-  Build --> Upload
+  Install --> Check
+  Check --> Unit
+  Unit --> Build
+  Build --> Audit
+  Audit --> Browser
+  Browser --> Smoke
+  Smoke --> Upload
   Upload --> Deploy
   Deploy --> Pages
 ```
 
 The workflow is defined in `.github/workflows/pages.yml`.
 
-The build step runs after unit and smoke tests. This means the deployed artifact is only produced if the extracted service tests and browser-level tests pass.
+The workflow builds the static artifact before browser smoke tests, audits the generated SQLite database, then runs Playwright against `vite preview`. This means CI tests the same `dist/` output that is uploaded to GitHub Pages rather than a separate Vite dev-server build.
 
 `vite.config.ts` sets the Vite `base` path dynamically under GitHub Actions:
 
@@ -678,7 +692,7 @@ The build step runs after unit and smoke tests. This means the deployed artifact
 
 Fast service-level verification is handled by `npm run test:unit`, which runs Vitest against extracted pure logic such as share links, exports, and saved-library imports.
 
-The primary browser workflow verification is `npm run test:smoke`, which runs Playwright tests against the app.
+The primary browser workflow verification is `npm run test:smoke`, which runs Playwright tests against the app. CI uses `npm run test:smoke:preview` after `npm run build` so browser tests exercise the production bundle.
 
 Current smoke coverage includes:
 
@@ -703,12 +717,12 @@ Data quality verification is supported by `npm run audit:data`, which reads the 
 
 ## Runtime Error Boundaries And Failure Modes
 
-The app currently handles major runtime failures through status messages rather than a full React error boundary.
+The React root is wrapped in `src/components/ErrorBoundary.tsx`. It catches unexpected render-time errors, logs details to the console, and shows a reload affordance instead of leaving a blank page.
 
 Important failure cases:
 
 - `words.sqlite.gz` and fallback `words.sqlite` cannot be loaded
-- Datamuse semantic request fails
+- Datamuse semantic request fails or times out
 - Generation yields smaller sets because filters are too narrow
 - Theme criteria produce no semantic matches or mostly fallback output
 - Clipboard access is denied
@@ -716,6 +730,7 @@ Important failure cases:
 The current behavior is pragmatic:
 
 - Database load errors appear in the status area
+- Datamuse failures fall back to compatible cached semantic results, or to the local SQLite pool with a visible warning
 - Generation errors appear in the status area
 - Generation warnings appear in the generator and Diagnostics view
 - Clipboard failures produce a toast-like notice

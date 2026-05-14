@@ -126,7 +126,8 @@ function App() {
     setIsGenerating(true);
     setStatus("");
     try {
-      const semanticWords = await fetchSemanticWords(nextFilters);
+      const semanticLookup = await fetchSemanticWords(nextFilters);
+      const semanticWords = semanticLookup.words;
       const generated = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters);
       setSemanticPool(semanticWords);
       setSets(generated);
@@ -144,6 +145,8 @@ function App() {
       setView("generator");
       if (generated.some((set) => set.words.length < nextFilters.wordsPerSet)) {
         setStatus("Some sets were smaller than requested because the active filters narrowed the pool.");
+      } else if (semanticLookup.warning) {
+        setStatus(semanticLookup.warning);
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Generation failed.");
@@ -163,11 +166,13 @@ function App() {
     };
     setIsGenerating(true);
     try {
-      const semanticWords = await fetchSemanticWords(nextFilters);
+      const semanticLookup = await fetchSemanticWords(nextFilters);
+      const semanticWords = semanticLookup.words;
       const [replacement] = generateSets(getLocalPool(wordDb, nextFilters), semanticWords, nextFilters);
       if (!replacement) return;
       setSemanticPool(semanticWords);
       setSets((current) => current.map((set, index) => (index === targetIndex ? replacement : set)));
+      if (semanticLookup.warning) setStatus(semanticLookup.warning);
       setToast(`Regenerated Set ${targetIndex + 1}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Regeneration failed.");

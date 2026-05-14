@@ -15,19 +15,23 @@ const DEFINITION_CACHE_KEY = "random-words:definition-cache:v2";
 const MAX_CACHE_ITEMS = 80;
 const MAX_DEFINITION_CACHE_ITEMS = 600;
 
-export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]> {
+export interface SemanticLookupResult {
+  words: WordEntry[];
+  source: "none" | "cache" | "live" | "stale-cache" | "fallback";
+  warning?: string;
+}
+
+export async function fetchSemanticWords(filters: Filters): Promise<SemanticLookupResult> {
   const theme = filters.theme.trim();
-  if (!theme) return [];
+  if (!theme) return { words: [], source: "none" };
 
   const cache = readCache();
-  const key = [
-    theme.toLowerCase(),
-    filters.semanticMode,
-    filters.includePhrases ? "phrases" : "words",
-    filters.semanticLimit,
-  ].join("|");
+  const key = semanticCacheKey(filters);
   if (cache[key]) {
-    return cache[key].filter((entry) => passesEntryFilters(entry, filters, { semanticModeRestrictions: true }));
+    return {
+      words: filteredSemanticEntries(cache[key], filters),
+      source: "cache",
+    };
   }
 
   const params = new URLSearchParams();
@@ -43,19 +47,36 @@ export async function fetchSemanticWords(filters: Filters): Promise<WordEntry[]>
     if (topics) params.set("topics", topics);
   }
 
-  const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`);
-  if (!response.ok) throw new Error(`Datamuse request failed (${response.status})`);
+  try {
+    const response = await fetch(`https://api.datamuse.com/words?${params.toString()}`);
+    if (!response.ok) throw new Error(`Datamuse request failed (${response.status})`);
 
-  const payload = (await response.json()) as DatamuseWord[];
-  const words = payload
-    .map((item, index) => toEntry(item, index))
-    .filter((entry): entry is WordEntry => Boolean(entry))
-    .filter((entry) => passesEntryFilters(entry, filters, { semanticModeRestrictions: true }));
+    const payload = (await response.json()) as DatamuseWord[];
+    const words = payload
+      .map((item, index) => toEntry(item, index))
+      .filter((entry): entry is WordEntry => Boolean(entry))
+      .filter((entry) => passesEntryFilters(entry, filters, { semanticModeRestrictions: true }));
 
-  cache[key] = dedupe(words);
-  trimCache(cache);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-  return cache[key];
+    cache[key] = dedupe(words);
+    trimCache(cache);
+    writeCache(cache);
+    return { words: cache[key], source: "live" };
+  } catch {
+    const staleWords = findCachedSemanticFallback(cache, filters);
+    if (staleWords.length) {
+      return {
+        words: staleWords,
+        source: "stale-cache",
+        warning: "Datamuse is unavailable, so this generation used cached theme matches from this browser.",
+      };
+    }
+
+    return {
+      words: [],
+      source: "fallback",
+      warning: "Datamuse is unavailable, so this generation used the local word database only.",
+    };
+  }
 }
 
 export async function fetchDefinitions(entries: WordEntry[]): Promise<Record<string, string>> {
@@ -85,7 +106,11 @@ export async function fetchDefinitions(entries: WordEntry[]): Promise<Record<str
   }
 
   trimDefinitionCache(cache);
-  localStorage.setItem(DEFINITION_CACHE_KEY, JSON.stringify(cache));
+  try {
+    localStorage.setItem(DEFINITION_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Definition caching is best-effort; missing cache storage should not block definitions already fetched.
+  }
 
   for (const entry of uniqueEntries) {
     const definition = cache[definitionCacheKey(entry)];
@@ -152,11 +177,48 @@ function dedupe(words: WordEntry[]) {
   });
 }
 
+function semanticCacheKey(filters: Filters) {
+  return [
+    filters.theme.trim().toLowerCase(),
+    filters.semanticMode,
+    filters.includePhrases ? "phrases" : "words",
+    filters.semanticLimit,
+  ].join("|");
+}
+
+function semanticCachePrefix(filters: Filters) {
+  return [
+    filters.theme.trim().toLowerCase(),
+    filters.semanticMode,
+    filters.includePhrases ? "phrases" : "words",
+  ].join("|");
+}
+
+function filteredSemanticEntries(entries: WordEntry[], filters: Filters) {
+  return entries.filter((entry) => passesEntryFilters(entry, filters, { semanticModeRestrictions: true }));
+}
+
+function findCachedSemanticFallback(cache: Record<string, WordEntry[]>, filters: Filters) {
+  const prefix = `${semanticCachePrefix(filters)}|`;
+  const fallbackKey = Object.keys(cache)
+    .reverse()
+    .find((key) => key.startsWith(prefix));
+  return fallbackKey ? filteredSemanticEntries(cache[fallbackKey], filters) : [];
+}
+
 function readCache(): Record<string, WordEntry[]> {
   try {
     return JSON.parse(localStorage.getItem(CACHE_KEY) ?? "{}") as Record<string, WordEntry[]>;
   } catch {
     return {};
+  }
+}
+
+function writeCache(cache: Record<string, WordEntry[]>) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Cache writes are best-effort. Generation should still succeed if storage is full or disabled.
   }
 }
 

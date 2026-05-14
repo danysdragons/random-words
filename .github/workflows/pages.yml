@@ -30,17 +30,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Typecheck
+        run: npm run check
 
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Run smoke tests
-        run: CI=true npm run test:smoke
-
       - name: Build
         run: npm run build
+
+      - name: Audit generated data
+        run: npm run audit:data
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests against preview build
+        run: CI=true npm run test:smoke:preview
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
