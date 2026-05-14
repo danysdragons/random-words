@@ -36,7 +36,9 @@ The core design choices are:
 
 | Area | Main Files | Responsibility |
 | --- | --- | --- |
-| App shell and UI | `src/App.tsx`, `src/styles.css` | React state, controls, views, modals, sharing, exporting, local persistence |
+| App shell | `src/App.tsx` | Top-level state orchestration, routing between views, generation commands, persistence wiring |
+| UI components and views | `src/components/*`, `src/views/*`, `src/styles.css` | Criteria controls, semantic theme panel, generated set cards, library views, diagnostics, dialogs, manual rendering |
+| Runtime hooks | `src/hooks/*` | Persistent browser state, resolved UI theme behavior, generated-word definition fetching |
 | Static DB loading and filtering | `src/data.ts`, `src/services/filterEvaluator.ts` | Load compressed `words.sqlite.gz` with raw SQLite fallback, load build metadata, translate broad filters into SQL queries, apply shared client-side filters |
 | Semantic and definition lookup | `src/datamuse.ts`, `src/services/filterEvaluator.ts` | Datamuse requests, semantic mode mapping, shared client-side semantic filtering, local cache |
 | Generation algorithm | `src/generator.ts` | Seeded random generation, semantic/base pool blending, quality weighting, duplicate-family reduction |
@@ -194,7 +196,7 @@ flowchart TD
 
 ### Main React State
 
-`src/App.tsx` owns the application state:
+`src/App.tsx` owns the high-level application state and delegates presentational rendering to `src/components/*` and `src/views/*`:
 
 - `view`
 - `wordDb`
@@ -207,14 +209,12 @@ flowchart TD
 - `savedSets`
 - `collections`
 - `exportFormat`
-- `definitions`
 - `status`
 - `toast`
 - `isGenerating`
-- `systemPrefersDark`
 - `activeUiTheme`
 
-Most user-facing state is persisted through `usePersistentState`, which writes JSON to local storage.
+Most user-facing state is persisted through `usePersistentState`, which writes JSON to local storage. Definition fetching is isolated in `useWordDefinitions`, and system theme resolution plus the document-level `data-ui-theme` side effect are isolated in `useResolvedUiTheme`.
 
 ### View Model
 
@@ -229,9 +229,9 @@ The app has six top-level views:
 
 The generator view contains three functional panels:
 
-- Criteria panel
-- Generated word sets panel
-- Theme, semantics, and history panel
+- Criteria panel in `components/generatorPanels.tsx`
+- Generated word sets panel in `App.tsx`, using `WordSetCard` from `components/generatorPanels.tsx`
+- Theme, semantics, and history panel in `components/generatorPanels.tsx`
 
 ### UI Theme Flow
 

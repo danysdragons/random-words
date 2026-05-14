@@ -84,6 +84,13 @@ export interface GeneratedSet {
   createdAt: string;
 }
 
+export interface HistoryEntry {
+  id: string;
+  sets: GeneratedSet[];
+  filters: Filters;
+  createdAt: string;
+}
+
 export interface SavedSet {
   id: string;
   name: string;
